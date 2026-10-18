@@ -1,0 +1,6 @@
+{
+  "python.defaultInterpreterPath": "C:/Users/ohm/OneDrive/Documents/GitHub/CrimeVision-AI-Intelligent-Multimodal-Forensic-Analysis-Platform/backend/venv/Scripts/python.exe",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/backend"
+  ]
+}
