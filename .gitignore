@@ -1,0 +1,17 @@
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+.venv/
+
+# Uploaded evidence and model files
+backend/uploads/
+backend/temp/
+backend/models/
