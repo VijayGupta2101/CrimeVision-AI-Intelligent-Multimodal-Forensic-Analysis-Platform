@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>CrimeVision AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <header>
+        <div class="brand"><span class="logo">◉</span>
+            <div><b>CrimeVision AI</b><small>Intelligent Multimodal Forensic Analysis Platform</small></div>
+        </div><span class="backend"><i></i><span id="conn">Backend not checked</span></span>
+    </header>
+    <aside>
+        <nav><button class="nav active" data-mode="image">▧　Image Analysis</button><button class="nav"
+                data-mode="audio">♫　Audio Analysis</button><button class="nav" data-mode="video">▣　Video
+                Analysis</button></nav>
+        <section class="upload">
+            <h3>📁 Upload <span id="kind">Image</span></h3><label class="drop" for="file"><b id="upTitle">Upload
+                    Image</b><small id="upSub">Photos for evidence review</small><span>Choose file</span></label><input
+                id="file" type="file" hidden accept="image/*">
+            <p id="filename">No file selected</p><button id="process" disabled>✦ Start Processing</button>
+            <p class="hint">Upload image, audio, or video evidence for analysis.</p>
+        </section>
+        <p class="sidefoot">● Local forensic workspace　v1.0</p>
+    </aside>
+    <main>
+        <div class="heading">
+            <div><label>INVESTIGATION WORKSPACE</label>
+                <h1 id="title">Image Evidence Analysis</h1>
+                <p>Review detections, scene context, and AI-generated investigative leads.</p>
+            </div>
+            <div class="case"><small>CASE</small><b>CV-LOCAL-001</b></div>
+        </div>
+        <div id="notice" class="notice hidden"></div>
+        <section id="imageView" class="view grid">
+            <article class="panel">
+                <div class="ptitle"><b>◈ 3D Scene Reconstruction</b><span>VISUAL EVIDENCE</span></div>
+                <div id="imageStage" class="stage empty">▧<b>Evidence preview</b><small>Upload an image and start
+                        processing to view it here.</small></div>
+                <div class="foot" id="imageMeta">No image loaded</div>
+            </article>
+            <article class="panel">
+                <div class="ptitle"><b>▤ Evidence Analysis</b><span class="green">● READY</span></div>
+                <div class="summary"><label>✦ AI SCENE SUMMARY</label>
+                    <p id="imageSummary">Waiting for image analysis…</p>
+                </div>
+                <div class="stats">
+                    <div>📦<small>Objects</small><b id="objects">—</b></div>
+                    <div>♙<small>People</small><b id="people">—</b></div>
+                    <div>⚑<small>Weapons</small><b id="weapons">—</b></div>
+                    <div>⌖<small>Location</small><b id="location">—</b></div>
+                </div>
+                <div class="section"><label>⚡ ACTIONS DETECTED</label>
+                    <div id="actions" class="chips muted">No actions detected yet.</div>
+                </div>
+                <div class="section"><label>▣ EVIDENCE FACTS</label>
+                    <div id="facts" class="chips muted">Detected objects and facts will appear here.</div>
+                </div>
+                <div class="section"><label>◉ PROVISIONAL SCENARIOS</label>
+                    <div id="scenarios" class="scenarios muted">Scenarios appear after processing.</div>
+                    <p class="hint">AI-generated leads are provisional and require independent verification.</p>
+                </div>
+            </article>
+        </section>
+        <section id="audioView" class="view grid hidden">
+            <div class="stack">
+                <article class="panel">
+                    <div class="ptitle"><b>♫ Live Transcript</b><span>WHISPER / MULTILINGUAL</span></div>
+                    <div id="transcript" class="transcript">Waiting for audio input…</div>
+                    <div class="foot" id="audioMeta">0 timestamped segments</div>
+                </article>
+                <article class="panel">
+                    <div class="ptitle"><b>✦ AI Intelligence Report</b><span>GROQ ANALYSIS</span></div>
+                    <div class="summary"><label>AI SUMMARY</label>
+                        <p id="audioSummary">Results will appear here after processing.</p>
+                    </div>
+                    <div class="twocol">
+                        <div><small>Event type</small><b id="eventType">—</b></div>
+                        <div><small>Scene location</small><b id="audioLocation">—</b></div>
+                    </div>
+                    <div class="section"><label>TRANSCRIPT & TRANSLATION</label>
+                        <div id="translation" class="transcript">Transcript will appear here.</div>
+                    </div>
+                    <div class="section"><label>EXTRACTED FACTS</label>
+                        <div id="audioFacts" class="chips muted">No facts extracted yet.</div>
+                    </div>
+                </article>
+            </div>
+            <article class="panel">
+                <div class="ptitle"><b>◷ AI Generated Crime Event Timeline</b></div>
+                <p class="hint">Review each extracted event against the original recording.</p>
+                <div id="audioTimeline" class="timeline muted">Timeline will appear after upload.</div>
+            </article>
+        </section>
+        <section id="videoView" class="view grid hidden">
+            <div class="stack">
+                <article class="panel">
+                    <div class="ptitle"><b>▣ Video Evidence</b><span>FRAME REVIEW</span></div>
+                    <div id="videoStage" class="stage empty">▶<b>Video preview</b><small>Upload a video to review it
+                            here.</small></div>
+                    <div class="foot" id="videoMeta">No video loaded</div>
+                </article>
+                <article class="panel">
+                    <div class="ptitle"><b>✦ AI Visual Summary</b></div>
+                    <div id="videoSummary" class="summary">Upload and process a video to show its summary.</div>
+                </article>
+            </div>
+            <div class="stack">
+                <article class="panel">
+                    <div class="ptitle"><b>Scene Intelligence</b></div>
+                    <div class="mini"><small>Objects detected</small><b id="vObjects">—</b></div>
+                    <div class="mini"><small>People count</small><b id="vPeople">—</b></div>
+                    <div class="mini"><small>Location</small><b id="vLocation">—</b></div>
+                    <div class="mini"><small>Action</small><b id="vAction">—</b></div>
+                </article>
+                <article class="panel">
+                    <div class="ptitle"><b>◷ Event Timeline</b></div>
+                    <div id="videoTimeline" class="timeline muted">Timeline will appear after processing.</div>
+                </article>
+            </div>
+        </section>
+        <section class="bottom">
+            <article class="panel">
+                <div class="ptitle"><b>🤖 Ask AI about this evidence</b><span>EVIDENCE Q&A</span></div>
+                <div id="messages" class="messages">
+                    <div class="bubble">Ask about detected objects, transcript statements, or timeline events.</div>
+                </div>
+                <form id="chat"><input id="question" placeholder="Ask a question about the evidence…"><button>Ask
+                        ↗</button></form>
+                <p class="hint">Model-generated interpretations are not proof. Preserve and verify original evidence.
+                </p>
+            </article>
+            <article class="panel">
+                <div class="ptitle"><b>⇩ Case Export</b></div>
+                <p class="hint pad">Export the currently returned analysis data for review.</p><button class="secondary"
+                    id="json">⇩ Download JSON report</button><button class="secondary" id="txt">⇩ Download text
+                    summary</button>
+            </article>
+        </section>
+        <footer>CrimeVision AI • Multimodal evidence review • Local development interface</footer>
+    </main>
+    <script src="app.js"></script>
+</body>
+
+</html>
