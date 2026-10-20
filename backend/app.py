@@ -1,54 +1,56 @@
-"""Main Flask application for the CrimeVision AI platform."""
+from pathlib import Path
 
-import os
-
-# Environment variables must be set before importing heavier ML dependencies.
-os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
-os.environ.setdefault("USE_TF", "NO")
-os.environ.setdefault("USE_TORCH", "YES")
-os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
-os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
-
-from flask import Flask, jsonify
+from dotenv import load_dotenv
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 
-from config import API_CONFIG
-from routes import processing_bp, results_bp, upload_bp
-from routes.chat_routes import chat_bp
-from audio_module.api import audio_analysis_bp
-from video_module.api import video_analysis_bp
-from utils.logger import app_logger, setup_logger
-from utils.model_loader import preload_models
+BACKEND_DIR = Path(__file__).resolve().parent
+FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
+load_dotenv(BACKEND_DIR / ".env")
 
-app = Flask(__name__)
-app.config.from_object(API_CONFIG)
+from audio_module.api import audio_analysis_bp
+from routes.chat_routes import chat_bp
+from routes.processing import processing_bp
+from routes.upload import upload_bp
+from video_module.api import video_analysis_bp
+
+app = Flask(__name__, static_folder=None)
 CORS(app)
 
-logger = setup_logger("crimevision.app")
-logger.info("Starting CrimeVision AI backend")
+app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024
 
-try:
-    preload_models()
-except Exception as exc:  # pragma: no cover - defensive safety net
-    app_logger.warning("Model preloading failed: %s", exc)
-
-app.register_blueprint(upload_bp, url_prefix="/api")
+# Register API routes.
 app.register_blueprint(processing_bp, url_prefix="/api")
-app.register_blueprint(results_bp, url_prefix="/api")
+app.register_blueprint(upload_bp, url_prefix="/api")
 app.register_blueprint(chat_bp, url_prefix="/api")
 app.register_blueprint(audio_analysis_bp, url_prefix="/api")
 app.register_blueprint(video_analysis_bp, url_prefix="/api")
 
 
-@app.get("/")
+@app.route("/", methods=["GET"])
 def index():
-    return jsonify({"service": "CrimeVision AI", "status": "ok"})
+    return send_from_directory(FRONTEND_DIR, "index.html")
 
 
-@app.get("/health")
-def health_check():
-    return jsonify({"status": "ok"})
+@app.route("/<path:asset>", methods=["GET"])
+def frontend_asset(asset):
+    return send_from_directory(FRONTEND_DIR, asset)
+
+
+@app.route("/api", methods=["GET"])
+def api_status():
+    return jsonify({
+        "success": True,
+        "message": "CrimeVision AI API is running"
+    })
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=False)
+    print("\n========== REGISTERED FLASK ROUTES ==========")
+    print(app.url_map)
+
+    app.run(
+        host="127.0.0.1",
+        port=5000,
+        debug=False
+    )

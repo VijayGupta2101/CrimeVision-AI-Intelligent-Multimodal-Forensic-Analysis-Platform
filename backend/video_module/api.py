@@ -4,7 +4,6 @@ import logging
 import uuid
 from pathlib import Path
 
-import cv2
 from flask import Blueprint, current_app, jsonify, request
 from werkzeug.utils import secure_filename
 
@@ -33,6 +32,73 @@ ALLOWED_EXTENSIONS = {
 
 def allowed_video(filename):
     return Path(filename).suffix.lower() in ALLOWED_EXTENSIONS
+
+
+def analyze_video_file(
+    video_path: str,
+    original_filename: str | None = None,
+    interval_seconds: float = 1.0,
+) -> dict:
+    """Analyze a saved video and persist its findings for evidence Q&A."""
+    frames, metadata = extract_frames(
+        video_path,
+        interval_seconds=interval_seconds,
+    )
+
+    if not frames:
+        raise ValueError("No video frames could be extracted.")
+
+    detections = detect_objects_in_frames(frames)
+    object_summary = aggregate_objects(detections)
+    captions = generate_frame_captions(frames)
+    caption_summary = summarize_captions(captions)
+    incident_analysis = classify_crime(
+        detections=detections,
+        captions=captions,
+    )
+    timeline = build_timeline(
+        detections=detections,
+        captions=captions,
+        incident_analysis=incident_analysis,
+    )
+
+    total_detections = sum(
+        len(frame_result.get("detections", []))
+        for frame_result in detections
+    )
+    people_count = sum(
+        detection.get("label", "").lower() == "person"
+        for frame_result in detections
+        for detection in frame_result.get("detections", [])
+    )
+    summary = caption_summary or incident_analysis.get(
+        "summary",
+        "Video analysis completed; no visual summary was returned.",
+    )
+
+    result = {
+        "success": True,
+        "filename": original_filename or Path(video_path).name,
+        "metadata": metadata,
+        "detections": detections,
+        "objects": object_summary,
+        "object_summary": object_summary,
+        "object_count": total_detections,
+        "people_count": people_count,
+        "location": "Not established from video alone",
+        "actions": incident_analysis.get("actions", []),
+        "captions": captions,
+        "caption_summary": caption_summary,
+        "visual_summary": summary,
+        "summary": summary,
+        "forensic_analysis": incident_analysis,
+        "timeline": timeline,
+    }
+    result["session_id"] = session_store.create_session({
+        "source": "video",
+        **result,
+    })
+    return result
 
 
 @video_analysis_bp.get("/video")
@@ -96,56 +162,11 @@ def analyze_video():
     try:
         uploaded_file.save(saved_path)
 
-        frames, metadata = extract_frames(
+        result = analyze_video_file(
             str(saved_path),
+            original_filename=original_filename,
             interval_seconds=interval,
         )
-
-        if not frames:
-            raise ValueError("No video frames could be extracted.")
-
-        detections = detect_objects_in_frames(frames)
-
-        object_summary = aggregate_objects(detections)
-
-        captions = generate_frame_captions(frames)
-
-        caption_summary = summarize_captions(captions)
-
-        incident_analysis = classify_crime(
-            detections=detections,
-            captions=captions,
-        )
-
-        timeline = build_timeline(
-            detections=detections,
-            captions=captions,
-            incident_analysis=incident_analysis,
-        )
-
-        session_id = uuid.uuid4().hex
-
-        result = {
-            "success": True,
-            "session_id": session_id,
-            "filename": original_filename,
-            "metadata": metadata,
-            "detections": detections,
-            "object_summary": object_summary,
-            "captions": captions,
-            "caption_summary": caption_summary,
-            "forensic_analysis": incident_analysis,
-            "timeline": timeline,
-        }
-
-        session_store.update_session(
-            session_id,
-            {
-                **result,
-                "source": "video",
-            },
-        )
-
         return jsonify(result), 200
 
     except ValueError as exc:
