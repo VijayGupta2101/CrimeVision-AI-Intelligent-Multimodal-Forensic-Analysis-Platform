@@ -1,20 +1,22 @@
-/* ============================================================
-   CrimeVision AI — Frontend Application
-   Backend: Flask
-   API: http://127.0.0.1:5000/api
-   ============================================================ */
+// ============================================================
+// CrimeVision AI - Frontend Application
+// File: frontend/app.js
+// ============================================================
 
-"use strict";
-
-/* -------------------- CONFIGURATION -------------------- */
-
-const API_BASE_URL = window.location.protocol === "file:"
-    ? "http://127.0.0.1:5000/api"
-    : `${window.location.origin}/api`;
+const API_BASE_URL = "http://127.0.0.1:5000/api";
 
 const $ = (id) => document.getElementById(id);
 
-const CONFIG = {
+let mode = "image";
+let file = null;
+let preview = null;
+let result = {};
+
+// ============================================================
+// Configuration
+// ============================================================
+
+const cfg = {
     image: {
         label: "Image",
         title: "Image Evidence Analysis",
@@ -27,8 +29,7 @@ const CONFIG = {
         label: "Audio",
         title: "Audio Evidence Analysis",
         uploadTitle: "Upload Audio",
-        uploadSubtitle:
-            "Speech transcription, multilingual analysis, and event extraction",
+        uploadSubtitle: "Speech, multilingual transcription, and event extraction",
         accept: "audio/*,.mp3,.wav,.m4a,.ogg,.flac"
     },
 
@@ -36,42 +37,30 @@ const CONFIG = {
         label: "Video",
         title: "Video Evidence Analysis",
         uploadTitle: "Upload Video",
-        uploadSubtitle:
-            "Video evidence and chronological event review",
+        uploadSubtitle: "Video evidence and chronological event review",
         accept: "video/*,.mp4,.mov,.avi,.mkv,.webm"
     }
 };
 
-let currentMode = "image";
-let selectedFile = null;
-let previewURL = null;
-let currentResult = {};
-let currentSessionId = null;
-let isProcessing = false;
+// ============================================================
+// Safe HTML and data helpers
+// ============================================================
 
-
-/* -------------------- UTILITY FUNCTIONS -------------------- */
-
-function escapeHTML(value) {
-    return String(value ?? "").replace(/[&<>"']/g, (character) => {
-        const entities = {
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            '"': "&quot;",
-            "'": "&#39;"
-        };
-
-        return entities[character];
-    });
+function esc(value) {
+    return String(value ?? "").replace(/[&<>"']/g, character => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    })[character]);
 }
 
-
-function getValue(object, paths, fallback = "—") {
-    for (const path of paths) {
+function val(object, keys, fallback = "—") {
+    for (const key of keys) {
         let value = object;
 
-        for (const part of path.split(".")) {
+        for (const part of key.split(".")) {
             value = value?.[part];
         }
 
@@ -87,8 +76,7 @@ function getValue(object, paths, fallback = "—") {
     return fallback;
 }
 
-
-function toArray(value) {
+function arr(value) {
     if (Array.isArray(value)) {
         return value;
     }
@@ -96,7 +84,7 @@ function toArray(value) {
     if (typeof value === "string" && value.trim()) {
         return value
             .split(/[,;\n]/)
-            .map((item) => item.trim())
+            .map(item => item.trim())
             .filter(Boolean);
     }
 
@@ -107,1157 +95,889 @@ function toArray(value) {
     return [];
 }
 
-
-function showNotice(message, type = "") {
-    const noticeElement = $("notice");
-
-    if (!noticeElement) {
-        console.log(message);
-        return;
-    }
-
-    noticeElement.textContent = message;
-    noticeElement.className = `notice ${type}`;
-}
-
-
-function setText(id, value, fallback = "—") {
-    const element = $(id);
-
-    if (!element) {
-        return;
-    }
-
-    element.textContent =
+function readable(value, fallback = "—") {
+    if (
         value === undefined ||
         value === null ||
         value === ""
-            ? fallback
-            : String(value);
+    ) {
+        return fallback;
+    }
+
+    if (typeof value === "object") {
+        return JSON.stringify(value, null, 2);
+    }
+
+    return String(value);
 }
 
+function notice(message, type = "") {
+    const element = $("notice");
 
-function displayConnectionStatus(connected) {
-    const element = $("conn");
+    if (!element) return;
 
-    if (element) {
-        element.textContent = connected
-            ? "Backend connected (Online)"
-            : "Backend disconnected (Offline)";
-        const dot = element.parentElement ? element.parentElement.querySelector("i") : null;
-        if (dot) {
-            dot.style.background = connected ? "var(--green)" : "#ef4444";
+    element.textContent = message;
+    element.className = "notice " + type;
+}
+
+// ============================================================
+// Location formatting
+// ============================================================
+
+function formatLocation(data) {
+    const location = val(
+        data,
+        [
+            "location",
+            "scene_location",
+            "detected_location",
+            "forensic_analysis.location",
+            "forensic_analysis.scene_location",
+            "analysis.location",
+            "visual_analysis.location"
+        ],
+        null
+    );
+
+    if (
+        location === null ||
+        location === undefined ||
+        location === ""
+    ) {
+        return "Location not established from the available image evidence";
+    }
+
+    if (typeof location === "string") {
+        const cleaned = location
+            .replace(/\s+/g, " ")
+            .trim();
+
+        if (!cleaned || cleaned === "—") {
+            return "Location not established from the available image evidence";
         }
+
+        return cleaned;
     }
+
+    if (Array.isArray(location)) {
+        const items = location
+            .map(item => readable(item, ""))
+            .filter(Boolean);
+
+        return items.length
+            ? items.join(", ")
+            : "Location not established from the available image evidence";
+    }
+
+    if (typeof location === "object") {
+        const parts = [];
+
+        const keys = [
+            "address",
+            "building",
+            "room",
+            "area",
+            "neighborhood",
+            "city",
+            "district",
+            "state",
+            "country",
+            "description"
+        ];
+
+        for (const key of keys) {
+            const value = location[key];
+
+            if (
+                value !== undefined &&
+                value !== null &&
+                typeof value !== "object" &&
+                String(value).trim()
+            ) {
+                parts.push(String(value).trim());
+            }
+        }
+
+        if (parts.length) {
+            return [...new Set(parts)].join(", ");
+        }
+
+        return location.description
+            ? String(location.description)
+            : "Location not established from the available image evidence";
+    }
+
+    return String(location);
 }
 
+function setLocation(elementId, data) {
+    const element = $(elementId);
 
-function formatTimestamp(value) {
-    if (value === undefined || value === null || value === "") {
-        return "—";
-    }
+    if (!element) return;
 
-    // Support timestamps already formatted as HH:MM:SS.
-    if (typeof value === "string" && value.includes(":")) {
-        return value;
-    }
+    element.textContent = formatLocation(data);
 
-    const seconds = Number(value);
-
-    if (!Number.isFinite(seconds)) {
-        return String(value);
-    }
-
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-
-    if (hours > 0) {
-        return [
-            String(hours).padStart(2, "0"),
-            String(minutes).padStart(2, "0"),
-            String(remainingSeconds).padStart(2, "0")
-        ].join(":");
-    }
-
-    return [
-        String(minutes).padStart(2, "0"),
-        String(remainingSeconds).padStart(2, "0")
-    ].join(":");
+    // Make the value wrap naturally instead of breaking every word.
+    element.style.display = "block";
+    element.style.width = "100%";
+    element.style.minWidth = "0";
+    element.style.whiteSpace = "normal";
+    element.style.overflowWrap = "anywhere";
+    element.style.wordBreak = "normal";
+    element.style.lineHeight = "1.6";
 }
 
+// ============================================================
+// Mode selection
+// ============================================================
 
-/* -------------------- API REQUEST HANDLER -------------------- */
+function setMode(selectedMode) {
+    if (!cfg[selectedMode]) return;
 
-async function apiRequest(url, options = {}) {
-    let response;
+    mode = selectedMode;
 
-    try {
-        response = await fetch(url, options);
-    } catch (error) {
-        displayConnectionStatus(false);
-
-        throw new Error(
-            "Cannot connect to the Flask backend. " +
-            "Make sure backend/app.py is running on port 5000."
-        );
-    }
-
-    const responseText = await response.text();
-
-    let data = {};
-
-    try {
-        data = responseText
-            ? JSON.parse(responseText)
-            : {};
-    } catch {
-        data = {
-            raw: responseText
-        };
-    }
-
-    if (response.ok) {
-        displayConnectionStatus(true);
-    }
-
-    if (!response.ok) {
-        throw new Error(
-            data.error ||
-            data.message ||
-            `HTTP ${response.status}: ${response.statusText}`
-        );
-    }
-
-    if (data.success === false) {
-        throw new Error(
-            data.error ||
-            data.message ||
-            "The backend reported that analysis failed."
-        );
-    }
-
-    // Support common Flask response structures.
-    if (
-        data.result !== undefined &&
-        data.result !== null
-    ) {
-        return data.result;
-    }
-
-    if (
-        data.data !== undefined &&
-        data.data !== null
-    ) {
-        return data.data;
-    }
-
-    return data;
-}
-
-
-/* -------------------- MODE SWITCHING -------------------- */
-
-function setMode(mode) {
-    if (!CONFIG[mode]) {
-        return;
-    }
-
-    currentMode = mode;
-
-    document.querySelectorAll(".nav").forEach((button) => {
+    document.querySelectorAll(".nav").forEach(button => {
         button.classList.toggle(
             "active",
-            button.dataset.mode === mode
+            button.dataset.mode === selectedMode
         );
     });
 
-    document.querySelectorAll(".view").forEach((view) => {
+    document.querySelectorAll(".view").forEach(view => {
         view.classList.add("hidden");
     });
 
-    const activeView = $(`${mode}View`);
+    const currentView = $(selectedMode + "View");
 
-    if (activeView) {
-        activeView.classList.remove("hidden");
+    if (currentView) {
+        currentView.classList.remove("hidden");
     }
 
-    setText("kind", CONFIG[mode].label);
-    setText("title", CONFIG[mode].title);
-    setText("upTitle", CONFIG[mode].uploadTitle);
-    setText("upSub", CONFIG[mode].uploadSubtitle);
+    $("kind").textContent = cfg[selectedMode].label;
+    $("title").textContent = cfg[selectedMode].title;
+    $("upTitle").textContent = cfg[selectedMode].uploadTitle;
+    $("upSub").textContent = cfg[selectedMode].uploadSubtitle;
+    $("file").accept = cfg[selectedMode].accept;
 
-    const fileInput = $("file");
+    $("file").value = "";
+    $("filename").textContent = "No file selected";
 
-    if (fileInput) {
-        fileInput.accept = CONFIG[mode].accept;
-        fileInput.value = "";
-    }
+    file = null;
+    $("process").disabled = true;
 
-    selectedFile = null;
-
-    setText("filename", "No file selected");
-
-    const processButton = $("process");
-
-    if (processButton) {
-        processButton.disabled = true;
-    }
-
-    if (previewURL) {
-        URL.revokeObjectURL(previewURL);
-        previewURL = null;
-    }
-
-    clearPreview();
-
-    currentResult = {};
-    currentSessionId = null;
-
-    showNotice(
-        `Ready for ${CONFIG[mode].label.toLowerCase()} evidence.`
-    );
-
-    clearChat();
-}
-
-
-function clearPreview() {
-    const imageStage = $("imageStage");
-    const videoStage = $("videoStage");
-
-    if (imageStage) {
-        imageStage.className = "stage";
-        imageStage.innerHTML =
-            '<div class="muted">Upload an image to preview evidence.</div>';
-    }
-
-    if (videoStage) {
-        videoStage.className = "stage";
-        videoStage.innerHTML =
-            '<div class="muted">Upload a video to preview evidence.</div>';
-    }
-
-    setText("imageMeta", "No image loaded");
-    setText("videoMeta", "No video loaded");
-
-    setText("imageSummary", "Waiting for image analysis...");
-    setText("videoSummary", "Waiting for video analysis...");
-    setText("audioSummary", "Waiting for audio analysis...");
-
-    setText("transcript", "Waiting for audio input...");
-    setText("translation", "Waiting for transcription...");
-
-    setText("objects", "—");
-    setText("people", "—");
-    setText("weapons", "—");
-    setText("location", "—");
-
-    setText("vObjects", "—");
-    setText("vPeople", "—");
-    setText("vLocation", "—");
-    setText("vAction", "—");
-
-    setText("eventType", "Unclassified");
-    setText("audioLocation", "Not established");
-
-    const player = $("audioPlayer");
-    const playerContainer = $("audioPlayerContainer");
-    if (player) {
-        player.pause();
-        player.removeAttribute("src");
-    }
-    if (playerContainer) {
-        playerContainer.classList.add("hidden");
+    if (preview) {
+        URL.revokeObjectURL(preview);
+        preview = null;
     }
 }
 
-
-function clearChat() {
-    const messages = $("messages");
-
-    if (messages) {
-        messages.innerHTML = "";
-    }
-}
-
-
-/* -------------------- NAVIGATION -------------------- */
-
-document.querySelectorAll(".nav").forEach((button) => {
+document.querySelectorAll(".nav").forEach(button => {
     button.addEventListener("click", () => {
         setMode(button.dataset.mode);
     });
 });
 
+// ============================================================
+// File selection and preview
+// ============================================================
 
-/* -------------------- FILE UPLOAD AND PREVIEW -------------------- */
+$("file").addEventListener("change", event => {
+    file = event.target.files?.[0] || null;
 
-const fileInput = $("file");
-
-if (fileInput) {
-    fileInput.addEventListener("change", (event) => {
-        const uploadedFile = event.target.files?.[0];
-
-        if (!uploadedFile) {
-            selectedFile = null;
-
-            if ($("process")) {
-                $("process").disabled = true;
-            }
-
-            setText("filename", "No file selected");
-
-            return;
-        }
-
-        selectedFile = uploadedFile;
-
-        setText("filename", uploadedFile.name);
-
-        if ($("process")) {
-            $("process").disabled = isProcessing;
-        }
-
-        if (previewURL) {
-            URL.revokeObjectURL(previewURL);
-        }
-
-        previewURL = URL.createObjectURL(uploadedFile);
-
-        if (currentMode === "image") {
-            const stage = $("imageStage");
-
-            if (stage) {
-                stage.className = "stage";
-
-                stage.innerHTML = `
-                    <img
-                        src="${escapeHTML(previewURL)}"
-                        alt="Uploaded evidence preview"
-                    >
-                `;
-            }
-
-            setText("imageMeta", uploadedFile.name);
-        }
-
-        if (currentMode === "video") {
-            const stage = $("videoStage");
-
-            if (stage) {
-                stage.className = "stage";
-
-                stage.innerHTML = `
-                    <video
-                        controls
-                        preload="metadata"
-                        src="${escapeHTML(previewURL)}"
-                    ></video>
-                `;
-            }
-
-            setText("videoMeta", uploadedFile.name);
-        }
-
-        if (currentMode === "audio") {
-            const player = $("audioPlayer");
-            const playerContainer = $("audioPlayerContainer");
-            if (player) {
-                player.src = previewURL;
-            }
-            if (playerContainer) {
-                playerContainer.classList.remove("hidden");
-            }
-
-            setText(
-                "transcript",
-                `Selected audio: ${uploadedFile.name}\n` +
-                "Click Start Processing to transcribe this recording."
-            );
-
-            setText("audioSummary", "Audio is loaded and ready for AI transcription.");
-        }
-
-        showNotice(
-            `${uploadedFile.name} selected. Ready to process.`
-        );
-    });
-}
-
-
-/* -------------------- EVIDENCE DISPLAY HELPERS -------------------- */
-
-function renderChips(elementId, value) {
-    const element = $(elementId);
-
-    if (!element) {
+    if (!file) {
+        $("filename").textContent = "No file selected";
+        $("process").disabled = true;
         return;
     }
 
-    const items = toArray(value);
+    $("filename").textContent = file.name;
+    $("process").disabled = false;
+
+    if (preview) {
+        URL.revokeObjectURL(preview);
+    }
+
+    preview = URL.createObjectURL(file);
+
+    if (mode === "image") {
+        if ($("imageStage")) {
+            $("imageStage").className = "stage";
+
+            $("imageStage").innerHTML = `
+                <img
+                    src="${esc(preview)}"
+                    alt="Evidence preview"
+                    style="max-width:100%;max-height:650px;object-fit:contain;"
+                >
+            `;
+        }
+
+        if ($("imageMeta")) {
+            $("imageMeta").textContent = file.name;
+        }
+    }
+
+    if (mode === "video") {
+        if ($("videoStage")) {
+            $("videoStage").className = "stage";
+
+            $("videoStage").innerHTML = `
+                <video
+                    controls
+                    src="${esc(preview)}"
+                    style="max-width:100%;max-height:650px;"
+                ></video>
+            `;
+        }
+
+        if ($("videoMeta")) {
+            $("videoMeta").textContent = file.name;
+        }
+    }
+
+    if (mode === "audio" && $("transcript")) {
+        $("transcript").textContent =
+            `Selected audio: ${file.name}\nStart processing to transcribe this recording.`;
+    }
+});
+
+// ============================================================
+// API request helper
+// ============================================================
+
+async function req(url, options = {}) {
+    let response;
+
+    try {
+        response = await fetch(url, options);
+    } catch (error) {
+        throw new Error(
+            "Cannot connect to the Flask backend. Check that backend/app.py is running on port 5000."
+        );
+    }
+
+    const text = await response.text();
+
+    let data = {};
+
+    try {
+        data = text ? JSON.parse(text) : {};
+    } catch {
+        data = { raw: text };
+    }
+
+    if (!response.ok || data.success === false) {
+        throw new Error(
+            data.error ||
+            data.message ||
+            data.raw ||
+            `HTTP ${response.status}: ${response.statusText}`
+        );
+    }
+
+    return data.result ?? data.data ?? data;
+}
+
+// ============================================================
+// Display helpers
+// ============================================================
+
+function chips(elementId, value) {
+    const element = $(elementId);
+
+    if (!element) return;
+
+    const items = arr(value);
 
     element.className = "chips";
 
     if (!items.length) {
         element.innerHTML =
             '<span class="muted">No data returned.</span>';
-
         return;
     }
 
-    element.innerHTML = items.map((item) => {
-        let label;
+    element.innerHTML = items.map(item => {
+        const text = typeof item === "object"
+            ? item.name ||
+              item.label ||
+              item.text ||
+              item.description ||
+              JSON.stringify(item)
+            : item;
 
-        if (typeof item === "object" && item !== null) {
-            label =
-                item.name ||
-                item.label ||
-                item.text ||
-                item.description ||
-                JSON.stringify(item);
-        } else {
-            label = item;
-        }
-
-        return `
-            <span class="fact">
-                ${escapeHTML(label)}
-            </span>
-        `;
+        return `<span class="fact">${esc(text)}</span>`;
     }).join("");
 }
 
-
-function renderFacts(elementId, value) {
-    if (
-        value &&
-        typeof value === "object" &&
-        !Array.isArray(value)
-    ) {
-        const flattened = Object.entries(value).flatMap(
-            ([key, itemValue]) => {
-                const values = Array.isArray(itemValue)
-                    ? itemValue
-                    : [itemValue];
-
-                return values.map((item) => {
-                    const readableKey = key.replaceAll("_", " ");
-
-                    const readableValue =
-                        typeof item === "object" &&
-                        item !== null
-                            ? JSON.stringify(item)
-                            : item;
-
-                    return `${readableKey}: ${readableValue}`;
-                });
-            }
-        );
-
-        renderChips(elementId, flattened);
-
+function facts(elementId, value) {
+    if (!value) {
+        chips(elementId, []);
         return;
     }
 
-    renderChips(elementId, value);
+    if (
+        !Array.isArray(value) &&
+        typeof value === "object"
+    ) {
+        value = Object.entries(value).flatMap(([key, item]) => {
+            const items = Array.isArray(item) ? item : [item];
+
+            return items.map(entry => {
+                const formatted = typeof entry === "object"
+                    ? JSON.stringify(entry)
+                    : entry;
+
+                return `${key.replaceAll("_", " ")}: ${formatted}`;
+            });
+        });
+    }
+
+    chips(elementId, value);
 }
 
+// ============================================================
+// Timeline rendering
+// ============================================================
 
-/* -------------------- EVENT TIMELINE -------------------- */
-
-function renderTimeline(elementId, events) {
+function timeline(elementId, value) {
     const element = $(elementId);
 
-    if (!element) {
-        return;
-    }
+    if (!element) return;
 
-    const eventList = toArray(events).filter(
-        (event) => event && typeof event === "object"
-    );
+    const events = arr(value);
 
-    if (!eventList.length) {
+    if (!events.length) {
         element.className = "timeline muted";
         element.textContent = "No timeline events returned.";
-
         return;
     }
 
-    eventList.sort((first, second) => {
-        const firstTime = Number(
-            first.start_raw ??
-            first.start ??
-            first.timestamp ??
-            0
+    events.sort((a, b) => {
+        const startA = Number(
+            a.start_raw ?? a.start ?? a.timestamp ?? 0
         );
 
-        const secondTime = Number(
-            second.start_raw ??
-            second.start ??
-            second.timestamp ??
-            0
+        const startB = Number(
+            b.start_raw ?? b.start ?? b.timestamp ?? 0
         );
 
-        return firstTime - secondTime;
+        return startA - startB;
     });
 
     element.className = "timeline";
 
-    element.innerHTML = eventList.map((event) => {
+    element.innerHTML = events.map(event => {
         const rawTime =
             event.start_raw ??
             event.start ??
-            event.timestamp ??
-            event.time;
+            event.timestamp;
 
-        const time = formatTimestamp(rawTime);
+        const numericTime = Number(rawTime);
 
-        const category =
-            event.category ||
-            event.type ||
-            event.event_type ||
-            "Event";
+        let formattedTime = "—";
 
-        const description =
-            event.description ||
-            event.text ||
-            event.event ||
-            event.action ||
-            "Event details not provided.";
+        if (
+            rawTime !== undefined &&
+            rawTime !== null &&
+            rawTime !== "" &&
+            Number.isFinite(numericTime)
+        ) {
+            const minutes = Math.floor(numericTime / 60);
+            const seconds = Math.floor(numericTime % 60);
 
-        const evidence =
-            event.evidence_quote ||
-            event.evidence ||
-            event.transcript ||
-            "Review against the original evidence.";
+            formattedTime =
+                `${String(minutes).padStart(2, "0")}:` +
+                `${String(seconds).padStart(2, "0")}`;
+        } else if (event.time) {
+            formattedTime = event.time;
+        }
 
-        const numericTime = Number(rawTime ?? 0);
         return `
-            <div class="event" data-time="${numericTime}" title="Click to seek media to ${escapeHTML(time)}">
-                <div class="time">
-                    ${escapeHTML(time)}
-                </div>
+            <div class="event">
+                <div class="time">${esc(formattedTime)}</div>
 
                 <div>
                     <span class="category">
-                        ${escapeHTML(category)}
+                        ${esc(event.category || event.type || "Event")}
                     </span>
 
                     <b>
-                        ${escapeHTML(description)}
+                        ${esc(
+                            event.description ||
+                            event.text ||
+                            event.event ||
+                            "Event details not provided."
+                        )}
                     </b>
 
                     <small>
-                        ${escapeHTML(evidence)}
+                        ${esc(
+                            event.evidence_quote ||
+                            "Review against original evidence."
+                        )}
                     </small>
                 </div>
             </div>
         `;
     }).join("");
-
-    element.querySelectorAll(".event").forEach((eventEl) => {
-        eventEl.addEventListener("click", () => {
-            const time = parseFloat(eventEl.dataset.time);
-            if (!Number.isFinite(time)) return;
-            if (currentMode === "video") {
-                const video = document.querySelector("#videoStage video");
-                if (video) {
-                    video.currentTime = time;
-                    video.play().catch(() => {});
-                    showNotice(`Media offset seeked to ${formatTimestamp(time)}`, "success");
-                }
-            } else if (currentMode === "audio") {
-                const audio = $("audioPlayer");
-                if (audio) {
-                    audio.currentTime = time;
-                    audio.play().catch(() => {});
-                    showNotice(`Audio offset seeked to ${formatTimestamp(time)}`, "success");
-                }
-            }
-        });
-    });
 }
 
+// ============================================================
+// Image results
+// ============================================================
 
-/* -------------------- IMAGE ANALYSIS RENDERING -------------------- */
+function renderImage(data) {
+    $("imageSummary").textContent = readable(
+        val(
+            data,
+            [
+                "visual_summary",
+                "summary",
+                "scene_summary",
+                "caption",
+                "analysis.summary"
+            ],
+            "Analysis completed; no summary field returned."
+        )
+    );
 
-function renderImageResults(data) {
-    const stage = $("imageStage");
-    const rawObjects = getValue(data, ["objects", "detected_objects", "detections"], []);
-    const objectsList = toArray(rawObjects);
+    const objects = arr(
+        val(
+            data,
+            ["objects", "detected_objects", "detections"],
+            []
+        )
+    );
 
-    if (stage && previewURL) {
-        const objectsWithBox = objectsList.filter(item => item && item.box && typeof item.box === "object" && item.box.xmin !== undefined);
-        stage.className = "stage";
-        stage.innerHTML = `
-            <div class="bbox-wrapper" id="bboxWrapper">
-                <img id="bboxImg" src="${escapeHTML(previewURL)}" alt="Visual Evidence">
-                <div class="bbox-overlay" id="bboxOverlay"></div>
-            </div>
-        `;
-        const img = $("bboxImg");
-        const overlay = $("bboxOverlay");
-        if (img && overlay && objectsWithBox.length) {
-            const drawBoxes = () => {
-                const nw = img.naturalWidth || img.width;
-                const nh = img.naturalHeight || img.height;
-                if (!nw || !nh) return;
-                overlay.innerHTML = objectsWithBox.map(item => {
-                    const b = item.box;
-                    const left = Math.max(0, (b.xmin / nw) * 100);
-                    const top = Math.max(0, (b.ymin / nh) * 100);
-                    const width = Math.min(100 - left, ((b.xmax - b.xmin) / nw) * 100);
-                    const height = Math.min(100 - top, ((b.ymax - b.ymin) / nh) * 100);
-                    const label = item.label || "object";
-                    const isWeapon = /knife|gun|weapon|firearm|pistol/i.test(label);
-                    const conf = item.score ? ` ${(item.score * 100).toFixed(0)}%` : "";
-                    return `
-                        <div class="bbox-box ${isWeapon ? 'weapon' : ''}" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%;width:${width.toFixed(2)}%;height:${height.toFixed(2)}%;">
-                            <span class="bbox-label">${escapeHTML(label)}${conf}</span>
-                        </div>
-                    `;
-                }).join("");
-            };
-            if (img.complete) {
-                drawBoxes();
-            } else {
-                img.onload = drawBoxes;
-            }
-        }
+    $("objects").textContent = objects.length ||
+        val(data, ["object_count"], "—");
+
+    $("people").textContent = val(
+        data,
+        ["people_count", "person_count"],
+        "—"
+    );
+
+    const weaponCount = val(
+        data,
+        ["weapon_count"],
+        null
+    );
+
+    if (weaponCount !== null) {
+        $("weapons").textContent = weaponCount;
+    } else {
+        const detectedWeapons = objects.filter(item =>
+            /knife|gun|weapon|pistol|rifle/i.test(
+                JSON.stringify(item)
+            )
+        ).length;
+
+        $("weapons").textContent = detectedWeapons;
     }
-    const summary = getValue(data, [
-        "visual_summary",
-        "summary",
-        "scene_summary",
-        "caption",
-        "analysis.summary",
-        "forensic_analysis.summary"
-    ], "Analysis completed; no summary was returned.");
 
-    setText("imageSummary", summary);
+    // IMPORTANT: Use the location formatting helper.
+    setLocation("location", data);
 
-    const objects = toArray(
-        getValue(data, [
-            "objects",
-            "detected_objects",
-            "detections",
-            "evidence_facts.objects"
-        ], [])
-    );
-
-    setText(
-        "objects",
-        getValue(data, ["object_count", "objects_count"], objects.length)
-    );
-
-    setText(
-        "people",
-        getValue(data, ["people_count", "person_count"], "—")
-    );
-
-    const weaponCount = objects.filter((item) => {
-        const text = typeof item === "string"
-            ? item
-            : JSON.stringify(item);
-
-        return /knife|gun|weapon|firearm/i.test(text);
-    }).length;
-
-    setText(
-        "weapons",
-        getValue(data, ["weapon_count"], weaponCount)
-    );
-
-    setText(
-        "location",
-        getValue(data, [
-            "location",
-            "scene_location",
-            "detected_location"
-        ], "Not established")
-    );
-
-    renderChips(
+    chips(
         "actions",
-        getValue(data, [
-            "actions",
-            "actions_detected",
-            "detected_actions"
-        ], [])
+        val(data, ["actions", "actions_detected"], [])
     );
 
-    renderFacts(
+    facts(
         "facts",
-        getValue(data, [
-            "evidence_facts",
-            "facts",
-            "objects",
-            "detected_objects"
-        ], objects)
+        val(
+            data,
+            [
+                "evidence_facts",
+                "facts",
+                "objects",
+                "detected_objects"
+            ],
+            objects
+        )
     );
 
-    const scenarios = toArray(
-        getValue(data, [
-            "hypotheses",
-            "scenarios",
-            "application_scenarios",
-            "hypothesis_analysis.hypotheses"
-        ], [])
+    const scenarios = arr(
+        val(
+            data,
+            [
+                "hypotheses",
+                "scenarios",
+                "application_scenarios",
+                "hypothesis_analysis.hypotheses"
+            ],
+            []
+        )
     );
 
-    const scenarioElement = $("scenarios");
+    $("scenarios").className = "scenarios";
 
-    if (scenarioElement) {
-        scenarioElement.className = "scenarios";
+    $("scenarios").innerHTML = scenarios.length
+        ? scenarios.map((item, index) => `
+            <div class="scenario">
+                <b>
+                    ${esc(
+                        item.title ||
+                        item.name ||
+                        `Scenario ${index + 1}`
+                    )}
+                </b>
 
-        if (!scenarios.length) {
-            scenarioElement.textContent = "No scenarios returned.";
-        } else {
-            scenarioElement.innerHTML = scenarios.map(
-                (scenario, index) => {
-                    const title =
-                        scenario.title ||
-                        scenario.name ||
-                        `Scenario ${index + 1}`;
-
-                    const description =
-                        scenario.description ||
-                        scenario.hypothesis ||
-                        scenario.summary ||
-                        (typeof scenario === "string"
-                            ? scenario
-                            : JSON.stringify(scenario));
-
-                    return `
-                        <div class="scenario">
-                            <b>${escapeHTML(title)}</b>
-                            <p>${escapeHTML(description)}</p>
-                        </div>
-                    `;
-                }
-            ).join("");
-        }
-    }
+                <p>
+                    ${esc(
+                        item.description ||
+                        item.hypothesis ||
+                        item.summary ||
+                        (
+                            typeof item === "string"
+                                ? item
+                                : JSON.stringify(item)
+                        )
+                    )}
+                </p>
+            </div>
+        `).join("")
+        : "No scenarios returned.";
 }
 
+// ============================================================
+// Audio results
+// ============================================================
 
-/* -------------------- AUDIO ANALYSIS RENDERING -------------------- */
-
-function renderAudioResults(data) {
-    const transcript = getValue(data, [
-        "transcript",
-        "text",
-        "full_transcript"
-    ], "No transcript returned.");
-
-    setText("transcript", transcript);
-    setText("translation", transcript);
-
-    const segments = toArray(
-        getValue(data, ["segments", "chunks"], [])
+function renderAudio(data) {
+    $("transcript").textContent = readable(
+        val(data, ["transcript", "text"], "No transcript returned.")
     );
 
-    const language = getValue(data, [
-        "language",
-        "detected_language"
-    ], "not specified");
+    $("translation").textContent =
+        $("transcript").textContent;
 
-    setText(
-        "audioMeta",
-        `${segments.length} timestamped segments · Language: ${language}`
+    const segments = arr(
+        val(data, ["segments", "chunks"], [])
     );
 
-    const facts = getValue(data, [
-        "forensic_analysis",
-        "forensic_facts",
-        "facts",
-        "analysis"
-    ], {});
-
-    setText(
-        "audioSummary",
-        getValue(data, [
-            "summary",
-            "ai_summary",
-            "forensic_analysis.summary",
-            "forensic_analysis.scene_type"
-        ], "Audio analysis completed.")
-    );
-
-    setText(
-        "eventType",
-        getValue(facts, [
-            "event_type",
-            "scene_type",
-            "incident_type",
-            "facts.scene_type"
-        ], "Unclassified")
-    );
-
-    setText(
-        "audioLocation",
-        getValue(facts, [
-            "location",
-            "scene_location",
-            "facts.location"
-        ], "Not established")
-    );
-
-    renderFacts("audioFacts", facts);
-
-    renderTimeline(
-        "audioTimeline",
-        getValue(data, [
-            "timeline",
-            "anchor_events",
-            "events"
-        ], [])
-    );
-}
-
-
-/* -------------------- VIDEO ANALYSIS RENDERING -------------------- */
-
-function renderVideoResults(data) {
-    setText(
-        "videoSummary",
-        getValue(data, [
-            "visual_summary",
-            "summary",
-            "video_summary",
-            "analysis.summary"
-        ], "Video analysis completed.")
-    );
-
-    const objects = toArray(
-        getValue(data, [
-            "objects",
-            "detected_objects",
-            "object_summary"
-        ], [])
-    );
-
-    setText(
-        "vObjects",
-        objects.length
-            ? objects.map((item) => {
-                if (typeof item === "object" && item !== null) {
-                    return item.name || item.label || JSON.stringify(item);
-                }
-
-                return item;
-            }).join(", ")
-            : getValue(data, ["object_count"], "—")
-    );
-
-    setText(
-        "vPeople",
-        getValue(data, ["people_count", "person_count"], "—")
-    );
-
-    setText(
-        "vLocation",
-        getValue(data, ["location", "scene_location"], "—")
-    );
-
-    const actions = toArray(
-        getValue(data, [
-            "actions",
-            "actions_detected"
-        ], [])
-    );
-
-    setText(
-        "vAction",
-        actions.length
-            ? actions.join(", ")
-            : "—"
-    );
-
-    renderTimeline(
-        "videoTimeline",
-        getValue(data, [
-            "timeline",
-            "timeline_results",
-            "events"
-        ], [])
-    );
-}
-
-
-/* -------------------- RENDER ANALYSIS RESULTS -------------------- */
-
-function renderResults(mode, data) {
-    currentResult = data;
-    currentSessionId = data.session_id || null;
-
-    if (mode === "image") {
-        renderImageResults(data);
-    }
-
-    if (mode === "audio") {
-        renderAudioResults(data);
-    }
-
-    if (mode === "video") {
-        renderVideoResults(data);
-    }
-}
-
-
-/* -------------------- START ANALYSIS -------------------- */
-
-const processButton = $("process");
-
-if (processButton) {
-    processButton.addEventListener("click", async () => {
-        if (!selectedFile || isProcessing) {
-            return;
-        }
-
-        const endpoints = {
-            image: "/image/analyze",
-            audio: "/audio/analyze",
-            video: "/video/analyze"
-        };
-
-        const endpoint = endpoints[currentMode];
-
-        if (!endpoint) {
-            showNotice("Invalid analysis mode.", "error");
-            return;
-        }
-
-        isProcessing = true;
-        processButton.disabled = true;
-
-        showNotice(
-            "Uploading evidence and waiting for AI analysis..."
+    $("audioMeta").textContent =
+        `${segments.length} timestamped segments · Language: ` +
+        readable(
+            val(
+                data,
+                ["language", "detected_language"],
+                "not specified"
+            )
         );
 
-        try {
-            const formData = new FormData();
+    $("audioSummary").textContent = readable(
+        val(
+            data,
+            [
+                "summary",
+                "ai_summary",
+                "forensic_analysis.summary",
+                "forensic_analysis.scene_type"
+            ],
+            "Audio analysis completed."
+        )
+    );
 
-            formData.append("file", selectedFile);
+    const forensicFacts = val(
+        data,
+        [
+            "forensic_analysis",
+            "forensic_facts",
+            "facts",
+            "analysis"
+        ],
+        {}
+    );
 
-            const data = await apiRequest(
-                API_BASE_URL + endpoint,
-                {
-                    method: "POST",
-                    body: formData
-                }
-            );
+    $("eventType").textContent = readable(
+        val(
+            forensicFacts,
+            ["event_type", "scene_type", "incident_type"],
+            "Unclassified"
+        )
+    );
 
-            renderResults(currentMode, data);
+    setLocation("audioLocation", forensicFacts);
 
-            showNotice(
-                "Analysis completed. Verify generated findings against the original evidence.",
-                "success"
-            );
+    facts("audioFacts", forensicFacts);
 
-        } catch (error) {
-            console.error("Analysis failed:", error);
-
-            showNotice(
-                `Analysis failed: ${error.message}`,
-                "error"
-            );
-
-        } finally {
-            isProcessing = false;
-
-            processButton.disabled = !selectedFile;
-        }
-    });
+    timeline(
+        "audioTimeline",
+        val(
+            data,
+            ["timeline", "anchor_events", "events"],
+            []
+        )
+    );
 }
 
+// ============================================================
+// Video results
+// ============================================================
 
-/* -------------------- AI CHAT -------------------- */
+function renderVideo(data) {
+    $("videoSummary").textContent = readable(
+        val(
+            data,
+            ["visual_summary", "summary", "video_summary"],
+            "Video analysis completed."
+        )
+    );
 
-const chatForm = $("chat");
-
-if (chatForm) {
-    chatForm.addEventListener("submit", async (event) => {
-        event.preventDefault();
-
-        const questionInput = $("question");
-
-        if (!questionInput) {
-            return;
+    $("vObjects").textContent = arr(
+        val(data, ["objects", "detected_objects"], [])
+    ).map(item => {
+        if (typeof item === "object") {
+            return item.label || item.name || JSON.stringify(item);
         }
 
-        const question = questionInput.value.trim();
+        return item;
+    }).join(", ") || readable(val(data, ["object_count"]));
 
-        if (!question) {
-            return;
-        }
+    $("vPeople").textContent = readable(
+        val(data, ["people_count", "person_count"])
+    );
 
-        if (!currentSessionId) {
-            showNotice("Analyze evidence before asking questions.", "error");
-            return;
-        }
+    setLocation("vLocation", data);
 
-        questionInput.value = "";
+    $("vAction").textContent = arr(
+        val(data, ["actions", "actions_detected"], [])
+    ).map(item => readable(item)).join(", ") || "—";
 
-        const messages = $("messages");
-
-        if (messages) {
-            messages.insertAdjacentHTML(
-                "beforeend",
-                `<div class="bubble user">${escapeHTML(question)}</div>`
-            );
-        }
-
-        try {
-            const data = await apiRequest(
-                `${API_BASE_URL}/chat/${currentMode}`,
-                {
-                    method: "POST",
-
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-
-                    body: JSON.stringify({
-                        session_id: currentSessionId,
-                        question: question,
-                        context: currentResult
-                    })
-                }
-            );
-
-            const answer = getValue(data, [
-                "answer",
-                "response",
-                "message"
-            ], JSON.stringify(data));
-
-            if (messages) {
-                messages.insertAdjacentHTML(
-                    "beforeend",
-                    `<div class="bubble">${escapeHTML(answer)}</div>`
-                );
-            }
-
-        } catch (error) {
-            console.error("Chat request failed:", error);
-
-            if (messages) {
-                messages.insertAdjacentHTML(
-                    "beforeend",
-                    `<div class="bubble">Chat error: ${escapeHTML(error.message)}</div>`
-                );
-            }
-        }
-
-        if (messages) {
-            messages.scrollTop = messages.scrollHeight;
-        }
-    });
+    timeline(
+        "videoTimeline",
+        val(data, ["timeline", "timeline_results", "events"], [])
+    );
 }
 
+// ============================================================
+// Render results
+// ============================================================
 
-/* -------------------- REPORT DOWNLOADS -------------------- */
+function render(selectedMode, data) {
+    result = data;
 
-function downloadFile(filename, content, contentType) {
+    if (selectedMode === "image") {
+        renderImage(data);
+    }
+
+    if (selectedMode === "audio") {
+        renderAudio(data);
+    }
+
+    if (selectedMode === "video") {
+        renderVideo(data);
+    }
+}
+
+// ============================================================
+// Upload and analyze
+// ============================================================
+
+$("process").addEventListener("click", async () => {
+    if (!file) {
+        notice("Please select a file first.", "error");
+        return;
+    }
+
+    const endpoints = {
+        image: "/image/analyze",
+        audio: "/audio/analyze",
+        video: "/video/analyze"
+    };
+
+    const endpoint = endpoints[mode];
+
+    $("process").disabled = true;
+
+    notice("Uploading evidence and waiting for analysis...");
+
+    try {
+        const formData = new FormData();
+
+        formData.append("file", file);
+
+        const data = await req(
+            API_BASE_URL + endpoint,
+            {
+                method: "POST",
+                body: formData
+            }
+        );
+
+        render(mode, data);
+
+        $("conn").textContent = "Backend connected";
+
+        notice(
+            "Analysis finished. Verify generated findings against the original evidence.",
+            "success"
+        );
+    } catch (error) {
+        console.error("Evidence analysis error:", error);
+
+        notice(
+            `Analysis failed: ${error.message}`,
+            "error"
+        );
+    } finally {
+        $("process").disabled = !file;
+    }
+});
+
+// ============================================================
+// Chat
+// ============================================================
+
+$("chat").addEventListener("submit", async event => {
+    event.preventDefault();
+
+    const question = $("question").value.trim();
+
+    if (!question) return;
+
+    $("question").value = "";
+
+    $("messages").insertAdjacentHTML(
+        "beforeend",
+        `<div class="bubble user">${esc(question)}</div>`
+    );
+
+    const loadingId = "chat-loading-" + Date.now();
+
+    $("messages").insertAdjacentHTML(
+        "beforeend",
+        `<div class="bubble" id="${loadingId}">Thinking...</div>`
+    );
+
+    const loadingElement = $(loadingId);
+
+    try {
+        const data = await req(
+            `${API_BASE_URL}/chat/${mode}`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    session_id: "CV-LOCAL-001",
+                    question: question,
+                    context: result
+                })
+            }
+        );
+
+        if (loadingElement) {
+            loadingElement.textContent = readable(
+                val(
+                    data,
+                    ["answer", "response", "message"],
+                    "No answer was returned."
+                )
+            );
+        }
+    } catch (error) {
+        console.error("Chat error:", error);
+
+        if (loadingElement) {
+            loadingElement.textContent =
+                `Chat error: ${error.message}`;
+        }
+    }
+
+    $("messages").scrollTop = $("messages").scrollHeight;
+});
+
+// ============================================================
+// Export report
+// ============================================================
+
+function downloadFile(filename, content, mimeType) {
     const blob = new Blob(
         [content],
-        { type: contentType }
+        { type: mimeType }
     );
 
     const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
+    const link = document.createElement("a");
 
-    anchor.href = url;
-    anchor.download = filename;
+    link.href = url;
+    link.download = filename;
 
-    document.body.appendChild(anchor);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
 
-    anchor.click();
-    anchor.remove();
-
-    setTimeout(() => {
-        URL.revokeObjectURL(url);
-    }, 1000);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+$("json").addEventListener("click", () => {
+    downloadFile(
+        "crimevision-report.json",
+        JSON.stringify(
+            {
+                case_id: "CV-LOCAL-001",
+                mode: mode,
+                generated_at: new Date().toISOString(),
+                analysis: result
+            },
+            null,
+            2
+        ),
+        "application/json"
+    );
+});
 
-const jsonButton = $("json");
+$("txt").addEventListener("click", () => {
+    const content = [
+        "CrimeVision AI Evidence Review",
+        "Case: CV-LOCAL-001",
+        `Mode: ${mode}`,
+        `Generated: ${new Date().toLocaleString()}`,
+        "",
+        JSON.stringify(result, null, 2),
+        "",
+        "AI outputs are provisional and require independent verification."
+    ].join("\n");
 
-if (jsonButton) {
-    jsonButton.addEventListener("click", () => {
-        const report = {
-            case_id: "CV-LOCAL-001",
-            mode: currentMode,
-            generated_at: new Date().toISOString(),
-            analysis: currentResult,
-            disclaimer:
-                "AI-generated findings are provisional and require independent verification."
-        };
+    downloadFile(
+        "crimevision-summary.txt",
+        content,
+        "text/plain;charset=utf-8"
+    );
+});
 
-        downloadFile(
-            "crimevision-report.json",
-            JSON.stringify(report, null, 2),
-            "application/json"
-        );
-    });
-}
-
-
-const textButton = $("txt");
-
-if (textButton) {
-    textButton.addEventListener("click", () => {
-        const report = [
-            "CrimeVision AI — Evidence Review",
-            "Case: CV-LOCAL-001",
-            `Mode: ${currentMode}`,
-            `Generated: ${new Date().toLocaleString()}`,
-            "",
-            "ANALYSIS RESULTS",
-            JSON.stringify(currentResult, null, 2),
-            "",
-            "DISCLAIMER",
-            "AI-generated findings are provisional and require independent verification."
-        ].join("\n");
-
-        downloadFile(
-            "crimevision-summary.txt",
-            report,
-            "text/plain;charset=utf-8"
-        );
-    });
-}
-
-
-/* -------------------- BACKEND HEALTH CHECK -------------------- */
+// ============================================================
+// Backend health check
+// ============================================================
 
 async function checkBackend() {
+    const connection = $("conn");
+
+    if (!connection) return;
+
     try {
-        await apiRequest(
-            `${API_BASE_URL}/health`,
-            {
-                method: "GET"
-            }
-        );
+        await req(`${API_BASE_URL}/health`);
 
-        displayConnectionStatus(true);
-
+        connection.textContent = "Backend connected (Online)";
+        connection.classList.remove("disconnected");
     } catch (error) {
-        displayConnectionStatus(false);
+        connection.textContent = "Backend disconnected";
+        connection.classList.add("disconnected");
 
-        console.error(
-            "Backend health check failed:",
-            error.message
-        );
+        console.error("Backend health check failed:", error);
     }
 }
 
+// ============================================================
+// Start application
+// ============================================================
 
-/* -------------------- INITIALIZE APPLICATION -------------------- */
+setMode("image");
+checkBackend();
 
-document.addEventListener("DOMContentLoaded", () => {
-    setMode("image");
-    checkBackend();
-});
+setInterval(checkBackend, 15000);

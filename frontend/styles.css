@@ -796,3 +796,276 @@ footer {
 .event:hover {
     background: #15263d;
 }
+
+/* Fix evidence information cards */
+.stat-card,
+.metric-card,
+.info-card {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: break-word;
+    word-break: normal;
+    white-space: normal;
+
+}
+
+/* Keep location text readable */
+#location,
+#audioLocation,
+#vLocation {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: normal;
+    line-height: 1.5;
+    font-size: 15px;
+}
+
+/* Keep the evidence cards within their grid columns */
+.stats-grid,
+.metrics-grid,
+.evidence-grid {
+    min-width: 0;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+/* ===== CrimeVision evidence card layout fix ===== */
+
+* {
+    box-sizing: border-box;
+}
+
+.stats-grid,
+.stats,
+.stat-grid,
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+}
+
+.stat-card,
+.stat,
+.metric-card,
+.card {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: normal;
+}
+
+.stat-card *,
+.stat *,
+.metric-card *,
+.card * {
+    min-width: 0;
+    max-width: 100%;
+    word-break: normal;
+    overflow-wrap: anywhere;
+}
+
+/* Keep labels and values readable */
+.stat-card h1,
+.stat-card h2,
+.stat-card h3,
+.stat-card p,
+.stat-card span,
+.stat h1,
+.stat h2,
+.stat h3,
+.stat p,
+.stat span,
+.metric-card h1,
+.metric-card h2,
+.metric-card h3,
+.metric-card p,
+.metric-card span {
+    width: auto;
+    max-width: 100%;
+    white-space: normal;
+    word-break: normal;
+}
+
+/* Prevent the dashboard columns from forcing narrow cards */
+main,
+.content,
+.dashboard,
+.results,
+.evidence-analysis,
+.analysis-panel {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* Mobile layout */
+@media (max-width: 600px) {
+    .stats-grid,
+    .stats,
+    .stat-grid,
+    .metrics-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* ============================================================
+   CrimeVision AI - Layout and Location Formatting Fixes
+   Add this at the VERY END of frontend/styles.css
+   ============================================================ */
+
+/* Ensure all elements calculate their sizes correctly */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+/* Prevent the main workspace from forcing cards too narrow */
+main,
+.workspace,
+.content,
+.view,
+.dashboard,
+.results,
+.analysis-layout {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* Prevent statistics grids from overflowing */
+.stats-grid,
+.stats,
+.metrics-grid,
+.stat-grid,
+.summary-grid {
+    min-width: 0;
+    width: 100%;
+}
+
+/* Allow each statistic card to use its available width */
+.stat-card,
+.metric-card,
+.stat,
+.metric,
+.stat-box,
+.summary-card {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    overflow-wrap: break-word;
+    word-break: normal;
+}
+
+/* Keep labels and values inside their cards */
+.stat-card *,
+.metric-card *,
+.stat *,
+.metric *,
+.stat-box *,
+.summary-card * {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* Fix the Location value */
+#location,
+#audioLocation,
+#vLocation {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+
+    line-height: 1.6;
+    text-align: left;
+}
+
+/* Keep location cards from becoming excessively narrow */
+.stat-card:has(#location),
+.metric-card:has(#location),
+.stat:has(#location),
+.metric:has(#location),
+.stat-box:has(#location),
+.summary-card:has(#location) {
+    min-width: 0;
+    width: 100%;
+}
+
+/* Prevent long descriptions from breaking the dashboard */
+.scenario,
+.fact,
+.event,
+.bubble {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+/* Keep the image and video previews within their containers */
+.stage {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.stage img,
+.stage video {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+}
+
+/* Improve small-screen layout */
+@media (max-width: 768px) {
+    .stats-grid,
+    .stats,
+    .metrics-grid,
+    .stat-grid,
+    .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .stat-card,
+    .metric-card,
+    .stat,
+    .metric,
+    .stat-box,
+    .summary-card {
+        min-width: 0;
+        padding: 12px;
+    }
+
+    #location,
+    #audioLocation,
+    #vLocation {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .stats-grid,
+    .stats,
+    .metrics-grid,
+    .stat-grid,
+    .summary-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

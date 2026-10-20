@@ -1,57 +1,49 @@
-"""Chat API routes for forensic evidence queries."""
+from flask import Blueprint, request, jsonify
 
-from flask import Blueprint, jsonify, request
-
-from services.chat_service import query_chat
+from services.chat_service import chat_service
 
 chat_bp = Blueprint("chat", __name__)
 
 
-@chat_bp.get("/chat")
-def chat_status():
-    """Check whether the chatbot route is available."""
-    return jsonify({
-        "status": "ok",
-        "message": "Forensic chatbot service ready",
-    })
-
-
-@chat_bp.post("/chat/<mode>")
-def chat(mode: str):
-    """Answer questions about saved forensic analysis."""
-    if mode not in {"image", "video", "audio", "multimodal"}:
-        return jsonify({
-            "success": False,
-            "error": "Mode must be image, video, audio, or multimodal.",
-        }), 400
-
+def handle_chat():
     data = request.get_json(silent=True) or {}
 
-    session_id = data.get("session_id")
-    question = data.get("question")
+    question = data.get("question", "")
+    session_id = data.get("session_id", "default")
+    context = data.get("context", {})
 
-    if not isinstance(session_id, str) or not session_id.strip():
-        return jsonify({
-            "success": False,
-            "error": "session_id is required.",
-        }), 400
-
-    if not isinstance(question, str) or not question.strip():
-        return jsonify({
-            "success": False,
-            "error": "question is required.",
-        }), 400
-
-    result = query_chat(
-        session_id=session_id.strip(),
-        question=question.strip(),
-        mode=mode,
+    result = chat_service.chat(
+        question=question,
+        session_id=session_id,
+        context=context,
     )
 
-    if not result.get("success"):
-        return jsonify(result), 400
+    status_code = 200 if result.get("success") else 500
 
+    return jsonify(result), status_code
+
+
+@chat_bp.route("/chat", methods=["POST"])
+def general_chat():
+    return handle_chat()
+
+
+@chat_bp.route("/chat/<mode>", methods=["POST"])
+def mode_chat(mode):
+    allowed_modes = {"image", "audio", "video"}
+
+    if mode not in allowed_modes:
+        return jsonify({
+            "success": False,
+            "error": "Unsupported chat mode.",
+        }), 400
+
+    return handle_chat()
+
+
+@chat_bp.route("/chat", methods=["GET"])
+def chat_status():
     return jsonify({
-        "status": "success",
-        **result,
+        "success": True,
+        "message": "Chat service ready",
     })
