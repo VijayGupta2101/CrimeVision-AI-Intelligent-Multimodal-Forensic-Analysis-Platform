@@ -1,5 +1,4 @@
 from pathlib import Path
-from routes.chat_routes import chat_bp
 from dotenv import load_dotenv
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
@@ -12,6 +11,7 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 load_dotenv(BACKEND_DIR / ".env")
 
 from audio_module.api import audio_analysis_bp
+from routes.chat_routes import chat_bp
 from routes.processing import processing_bp
 from routes.results import results_bp
 from routes.upload import upload_bp

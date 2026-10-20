@@ -76,6 +76,8 @@ def analyze_video_file(
         "Video analysis completed; no visual summary was returned.",
     )
 
+    from routes.processing import extract_scene_location
+
     result = {
         "success": True,
         "filename": original_filename or Path(video_path).name,
@@ -85,7 +87,7 @@ def analyze_video_file(
         "object_summary": object_summary,
         "object_count": total_detections,
         "people_count": people_count,
-        "location": "Not established from video alone",
+        "location": extract_scene_location(summary, object_summary),
         "actions": incident_analysis.get("actions", []),
         "captions": captions,
         "caption_summary": caption_summary,

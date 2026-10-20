@@ -124,8 +124,125 @@ function notice(message, type = "") {
 // Location formatting
 // ============================================================
 
+function inferLocationFromData(data) {
+    if (!data) return null;
+
+    const summary = String(
+        val(
+            data,
+            [
+                "visual_summary",
+                "summary",
+                "video_summary",
+                "audio_summary",
+                "caption_summary"
+            ],
+            ""
+        )
+    ).toLowerCase();
+
+    const objects = arr(
+        val(data, ["objects", "detected_objects", "object_summary"], [])
+    );
+    const objectLabels = objects.map(item => {
+        if (typeof item === "string") return item.toLowerCase();
+        if (item && item.label) return String(item.label).toLowerCase();
+        return "";
+    }).filter(Boolean);
+
+    if (
+        summary.includes("living room") ||
+        summary.includes("lounge") ||
+        objectLabels.includes("couch") ||
+        objectLabels.includes("sofa")
+    ) {
+        return "Indoor (Living Room)";
+    }
+
+    if (
+        summary.includes("bedroom") ||
+        summary.includes("bed room") ||
+        objectLabels.includes("bed")
+    ) {
+        return "Indoor (Bedroom)";
+    }
+
+    if (
+        summary.includes("kitchen") ||
+        summary.includes("dining") ||
+        objectLabels.includes("refrigerator") ||
+        objectLabels.includes("microwave") ||
+        objectLabels.includes("oven") ||
+        objectLabels.includes("dining table")
+    ) {
+        return "Indoor (Kitchen / Dining)";
+    }
+
+    if (
+        summary.includes("office") ||
+        summary.includes("desk") ||
+        summary.includes("workspace") ||
+        objectLabels.includes("laptop") ||
+        objectLabels.includes("keyboard")
+    ) {
+        return "Indoor (Office / Workspace)";
+    }
+
+    if (
+        summary.includes("store") ||
+        summary.includes("shop") ||
+        summary.includes("supermarket") ||
+        summary.includes("market") ||
+        summary.includes("counter")
+    ) {
+        return "Commercial (Store / Retail)";
+    }
+
+    if (
+        summary.includes("street") ||
+        summary.includes("road") ||
+        summary.includes("highway") ||
+        summary.includes("sidewalk") ||
+        summary.includes("traffic") ||
+        objectLabels.includes("traffic light") ||
+        objectLabels.includes("stop sign")
+    ) {
+        return "Outdoor (Street / Roadway)";
+    }
+
+    if (
+        summary.includes("park") ||
+        summary.includes("garden") ||
+        summary.includes("forest") ||
+        summary.includes("field")
+    ) {
+        return "Outdoor (Park / Open Area)";
+    }
+
+    if (
+        objectLabels.includes("car") ||
+        objectLabels.includes("truck") ||
+        objectLabels.includes("bus") ||
+        objectLabels.includes("motorcycle")
+    ) {
+        return "Outdoor / Roadway (Vehicles)";
+    }
+
+    if (
+        summary.includes("indoor") ||
+        summary.includes("room") ||
+        objectLabels.includes("chair") ||
+        objectLabels.includes("tv") ||
+        objectLabels.includes("clock")
+    ) {
+        return "Indoor (General Scene)";
+    }
+
+    return null;
+}
+
 function formatLocation(data) {
-    const location = val(
+    let location = val(
         data,
         [
             "location",
@@ -139,23 +256,32 @@ function formatLocation(data) {
         null
     );
 
-    if (
-        location === null ||
-        location === undefined ||
-        location === ""
-    ) {
-        return "Location not established from the available image evidence";
+    const isPlaceholder = (str) => {
+        if (!str || typeof str !== "string") return true;
+        const trimmed = str.trim();
+        return (
+            !trimmed ||
+            trimmed === "—" ||
+            trimmed === "-" ||
+            /^not established/i.test(trimmed) ||
+            /^location not established/i.test(trimmed) ||
+            /^scene location unspecified/i.test(trimmed) ||
+            /^scene unspecified/i.test(trimmed) ||
+            /^unknown/i.test(trimmed)
+        );
+    };
+
+    if (location === null || location === undefined || location === "") {
+        const inferred = inferLocationFromData(data);
+        return inferred || "Scene Unspecified";
     }
 
     if (typeof location === "string") {
-        const cleaned = location
-            .replace(/\s+/g, " ")
-            .trim();
-
-        if (!cleaned || cleaned === "—") {
-            return "Location not established from the available image evidence";
+        const cleaned = location.replace(/\s+/g, " ").trim();
+        if (isPlaceholder(cleaned)) {
+            const inferred = inferLocationFromData(data);
+            return inferred || "Scene Unspecified";
         }
-
         return cleaned;
     }
 
@@ -164,14 +290,15 @@ function formatLocation(data) {
             .map(item => readable(item, ""))
             .filter(Boolean);
 
-        return items.length
-            ? items.join(", ")
-            : "Location not established from the available image evidence";
+        if (items.length) {
+            return items.join(", ");
+        }
+        const inferred = inferLocationFromData(data);
+        return inferred || "Scene Unspecified";
     }
 
     if (typeof location === "object") {
         const parts = [];
-
         const keys = [
             "address",
             "building",
@@ -187,7 +314,6 @@ function formatLocation(data) {
 
         for (const key of keys) {
             const value = location[key];
-
             if (
                 value !== undefined &&
                 value !== null &&
@@ -202,9 +328,12 @@ function formatLocation(data) {
             return [...new Set(parts)].join(", ");
         }
 
-        return location.description
-            ? String(location.description)
-            : "Location not established from the available image evidence";
+        if (location.description && !isPlaceholder(String(location.description))) {
+            return String(location.description);
+        }
+
+        const inferred = inferLocationFromData(data);
+        return inferred || "Scene Unspecified";
     }
 
     return String(location);
@@ -212,19 +341,22 @@ function formatLocation(data) {
 
 function setLocation(elementId, data) {
     const element = $(elementId);
-
     if (!element) return;
 
     element.textContent = formatLocation(data);
 
-    // Make the value wrap naturally instead of breaking every word.
+    // Make the value wrap naturally across the full width of the card.
     element.style.display = "block";
     element.style.width = "100%";
     element.style.minWidth = "0";
     element.style.whiteSpace = "normal";
-    element.style.overflowWrap = "anywhere";
     element.style.wordBreak = "normal";
-    element.style.lineHeight = "1.6";
+    element.style.overflowWrap = "break-word";
+    element.style.lineHeight = "1.4";
+    element.style.fontSize = "13.5px";
+    element.style.fontWeight = "700";
+    element.style.color = "#ffffff";
+    element.style.gridColumn = "1 / -1";
 }
 
 // ============================================================

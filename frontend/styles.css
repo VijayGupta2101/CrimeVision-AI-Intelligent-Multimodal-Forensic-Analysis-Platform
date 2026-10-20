@@ -354,33 +354,69 @@ main {
 
 .stats {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
-    padding: 0 13px 12px
+    padding: 0 13px 12px;
 }
 
-.stats>div {
+.stats > div,
+.stat-card {
     background: #0b1525;
     border: 1px solid #1c2d44;
     border-radius: 8px;
-    padding: 12px;
-    display: grid;
-    grid-template-columns: 24px 1fr;
-    gap: 3px 6px
+    padding: 11px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 6px;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
-.stats small {
-    font-size: 9px;
-    color: #8496b1
+.stat-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
 }
 
-.stats b {
-    font-size: 14px;
-    overflow-wrap: anywhere
+.stat-icon {
+    font-size: 15px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    flex-shrink: 0;
 }
 
-.stats>div:first-letter {
-    font-size: 17px
+.stats small,
+.stat-card small {
+    font-size: 9.5px;
+    color: #8496b1;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stats b,
+.stat-card b,
+.stats > div > b {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #edf3ff;
+    line-height: 1.35;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    word-break: normal;
+    overflow-wrap: break-word;
+    white-space: normal;
 }
 
 .section {
@@ -450,17 +486,20 @@ main {
 
 .twocol {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 9px;
-    margin: 0 13px 13px
+    margin: 0 13px 13px;
 }
 
 .twocol div,
+.twocol .stat-card,
 .mini {
     background: #0a1525;
     border: 1px solid #21334b;
     border-radius: 7px;
-    padding: 10px
+    padding: 10px;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .twocol small,
@@ -468,12 +507,21 @@ main {
     display: block;
     color: #8395af;
     font-size: 9px;
-    margin-bottom: 6px
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
 }
 
 .twocol b {
     color: #65d7a8;
-    font-size: 11px
+    font-size: 12px;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    word-break: normal;
+    overflow-wrap: break-word;
+    white-space: normal;
 }
 
 .section .transcript {
@@ -525,12 +573,19 @@ main {
 }
 
 .mini {
-    margin: 9px 12px
+    margin: 8px 12px;
 }
 
 .mini b {
-    font-size: 11px;
-    overflow-wrap: anywhere
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #edf3ff;
+    word-break: normal;
+    overflow-wrap: break-word;
+    white-space: normal;
+    display: block;
+    width: 100%;
+    min-width: 0;
 }
 
 .bottom {
@@ -989,11 +1044,14 @@ main,
     max-width: 100%;
 
     white-space: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     word-break: normal;
 
-    line-height: 1.6;
+    line-height: 1.4;
     text-align: left;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #edf3ff;
 }
 
 /* Keep location cards from becoming excessively narrow */

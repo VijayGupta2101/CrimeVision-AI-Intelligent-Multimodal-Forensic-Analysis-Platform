@@ -22,6 +22,39 @@ def processing_health():
     })
 
 
+def extract_scene_location(summary: str, objects: list) -> str:
+    """Extract a concise forensic scene location descriptor from visual cues."""
+    summary_lower = (summary or "").lower()
+    labels = [
+        item.get("label", "").lower()
+        for item in (objects or [])
+        if isinstance(item, dict)
+    ]
+
+    if "living room" in summary_lower or any(l in labels for l in ["couch", "sofa"]):
+        return "Indoor (Living Room)"
+    if "bedroom" in summary_lower or "bed" in labels:
+        return "Indoor (Bedroom)"
+    if "kitchen" in summary_lower or any(l in labels for l in ["refrigerator", "microwave", "oven"]):
+        return "Indoor (Kitchen / Dining)"
+    if "office" in summary_lower or any(l in labels for l in ["laptop", "keyboard", "mouse"]):
+        return "Indoor (Office / Workspace)"
+    if any(k in summary_lower for k in ["store", "shop", "supermarket", "counter"]):
+        return "Commercial (Store / Retail)"
+    if any(k in summary_lower for k in ["street", "road", "sidewalk", "highway"]) or any(l in labels for l in ["traffic light", "stop sign"]):
+        return "Outdoor (Street / Roadway)"
+    if any(k in summary_lower for k in ["park", "garden", "forest", "field"]):
+        return "Outdoor (Park / Open Area)"
+    if any(k in summary_lower for k in ["parking", "garage"]):
+        return "Parking / Garage"
+    if any(k in summary_lower for k in ["indoor", "room"]) or any(l in labels for l in ["chair", "table", "tv", "clock"]):
+        return "Indoor (General Scene)"
+    if any(l in labels for l in ["car", "truck", "bus", "motorcycle", "bicycle"]):
+        return "Outdoor (Roadway / Vehicles)"
+
+    return "Scene Location Unspecified"
+
+
 @processing_bp.route("/image/analyze", methods=["POST"])
 def analyze_image():
     """Analyze an uploaded image using the existing vision models."""
@@ -148,7 +181,7 @@ def analyze_image():
                 1 for item in objects
                 if item["label"].lower() == "person"
             ),
-            "location": "Not established from image alone",
+            "location": extract_scene_location(summary, objects),
             "actions": actions,
             "evidence_facts": [
                 {

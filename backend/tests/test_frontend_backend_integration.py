@@ -1,10 +1,14 @@
 import io
+import sys
 import wave
+from pathlib import Path
 
 import cv2
 import numpy as np
 import pytest
 from PIL import Image
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import app
 from services.session_store import session_store

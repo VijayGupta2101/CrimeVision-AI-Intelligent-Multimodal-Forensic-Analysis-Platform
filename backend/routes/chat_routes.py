@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 
 from services.chat_service import chat_service
+from services.session_store import session_store
 
 chat_bp = Blueprint("chat", __name__)
 
@@ -10,7 +11,14 @@ def handle_chat():
 
     question = data.get("question", "")
     session_id = data.get("session_id", "default")
-    context = data.get("context", {})
+    context = data.get("context")
+
+    if (not context or not isinstance(context, dict)) and session_id:
+        stored = session_store.get_session(session_id)
+        if stored:
+            context = stored
+        elif not context:
+            context = {}
 
     result = chat_service.chat(
         question=question,

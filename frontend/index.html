@@ -50,10 +50,10 @@
                     <p id="imageSummary">Waiting for image analysis…</p>
                 </div>
                 <div class="stats">
-                    <div>📦<small>Objects</small><b id="objects">—</b></div>
-                    <div>♙<small>People</small><b id="people">—</b></div>
-                    <div>⚑<small>Weapons</small><b id="weapons">—</b></div>
-                    <div>⌖<small>Location</small><b id="location">—</b></div>
+                    <div class="stat-card"><div class="stat-head"><span class="stat-icon">📦</span><small>Objects</small></div><b id="objects">—</b></div>
+                    <div class="stat-card"><div class="stat-head"><span class="stat-icon">♙</span><small>People</small></div><b id="people">—</b></div>
+                    <div class="stat-card"><div class="stat-head"><span class="stat-icon">⚑</span><small>Weapons</small></div><b id="weapons">—</b></div>
+                    <div class="stat-card"><div class="stat-head"><span class="stat-icon">⌖</span><small>Location</small></div><b id="location">—</b></div>
                 </div>
                 <div class="section"><label>⚡ ACTIONS DETECTED</label>
                     <div id="actions" class="chips muted">No actions detected yet.</div>
@@ -83,8 +83,8 @@
                         <p id="audioSummary">Results will appear here after processing.</p>
                     </div>
                     <div class="twocol">
-                        <div><small>Event type</small><b id="eventType">—</b></div>
-                        <div><small>Scene location</small><b id="audioLocation">—</b></div>
+                        <div class="stat-card"><div class="stat-head"><small>Event type</small></div><b id="eventType">—</b></div>
+                        <div class="stat-card"><div class="stat-head"><small>Scene location</small></div><b id="audioLocation">—</b></div>
                     </div>
                     <div class="section"><label>TRANSCRIPT & TRANSLATION</label>
                         <div id="translation" class="transcript">Transcript will appear here.</div>
@@ -116,10 +116,10 @@
             <div class="stack">
                 <article class="panel">
                     <div class="ptitle"><b>Scene Intelligence</b></div>
-                    <div class="mini"><small>Objects detected</small><b id="vObjects">—</b></div>
-                    <div class="mini"><small>People count</small><b id="vPeople">—</b></div>
-                    <div class="mini"><small>Location</small><b id="vLocation">—</b></div>
-                    <div class="mini"><small>Action</small><b id="vAction">—</b></div>
+                    <div class="mini stat-card"><div class="stat-head"><small>Objects detected</small></div><b id="vObjects">—</b></div>
+                    <div class="mini stat-card"><div class="stat-head"><small>People count</small></div><b id="vPeople">—</b></div>
+                    <div class="mini stat-card"><div class="stat-head"><small>Location</small></div><b id="vLocation">—</b></div>
+                    <div class="mini stat-card"><div class="stat-head"><small>Action</small></div><b id="vAction">—</b></div>
                 </article>
                 <article class="panel">
                     <div class="ptitle"><b>◷ Event Timeline</b></div>
