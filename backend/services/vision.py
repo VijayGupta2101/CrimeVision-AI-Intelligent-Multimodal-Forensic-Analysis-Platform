@@ -191,7 +191,10 @@ def generate_frame_captions(frames):
     results = []
 
     for item in frames:
-        output = captioner(item["image"])
+        try:
+            output = captioner(item["image"], text="a photo of")
+        except (TypeError, ValueError):
+            output = captioner(item["image"])
 
         caption = ""
 
@@ -252,21 +255,21 @@ def classify_crime(detections, captions):
 
     The output is a provisional assessment, not a legal finding.
     """
+    try:
+        client = get_groq_client()
 
-    client = get_groq_client()
+        model = os.getenv(
+            "GROQ_MODEL",
+            "llama-3.3-70b-versatile",
+        )
 
-    model = os.getenv(
-        "GROQ_MODEL",
-        "llama-3.3-70b-versatile",
-    )
+        # Keep context bounded for longer recordings.
+        context = {
+            "detections": detections[:120],
+            "captions": captions[:120],
+        }
 
-    # Keep context bounded for longer recordings.
-    context = {
-        "detections": detections[:120],
-        "captions": captions[:120],
-    }
-
-    prompt = f"""
+        prompt = f"""
 Analyze this sampled video evidence.
 
 Return valid JSON with these fields:
@@ -290,27 +293,50 @@ Evidence:
 {json.dumps(context, ensure_ascii=False, default=str)}
 """
 
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a cautious forensic evidence "
-                    "analysis assistant."
-                ),
-            },
-            {
-                "role": "user",
-                "content": prompt,
-            },
-        ],
-        temperature=0.1,
-    )
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a cautious forensic evidence "
+                        "analysis assistant."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+            temperature=0.1,
+        )
 
-    content = response.choices[0].message.content or "{}"
+        resp_content = response.choices[0].message.content or "{}"
+        return _parse_json(resp_content)
 
-    return _parse_json(content)
+    except Exception as exc:
+        logger.warning(f"Video Groq classification failed: {exc}")
+        sampled_captions = [c.get("caption", "") for c in captions if c.get("caption")]
+        all_labels = set(
+            d.get("label", "")
+            for f in detections
+            for d in f.get("detections", [])
+            if d.get("label")
+        )
+        return {
+            "incident_assessment": "provisional_review",
+            "summary": " ".join(sampled_captions[:3]) or f"Video analyzed with {len(detections)} sampled frames.",
+            "actions": ["Observation recorded" if all_labels else "No distinct actions detected"],
+            "supporting_evidence": [
+                {
+                    "timestamp": f.get("timestamp", 0.0),
+                    "observation": f"Sampled frame with {len(f.get('detections', []))} detection(s): {', '.join(d.get('label', '') for d in f.get('detections', [])[:3])}",
+                    "evidence_source": "vision_models",
+                }
+                for f in detections[:10] if f.get("detections")
+            ],
+            "limitations": [f"Groq LLM assessment was unavailable: {str(exc)}"],
+        }
 
 
 def build_timeline(

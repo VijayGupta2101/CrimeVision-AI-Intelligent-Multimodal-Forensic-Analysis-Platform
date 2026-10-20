@@ -70,7 +70,10 @@
         <section id="audioView" class="view grid hidden">
             <div class="stack">
                 <article class="panel">
-                    <div class="ptitle"><b>♫ Live Transcript</b><span>WHISPER / MULTILINGUAL</span></div>
+                    <div class="ptitle"><b>♫ Audio Evidence & Live Transcript</b><span>WHISPER / MULTILINGUAL</span></div>
+                    <div id="audioPlayerContainer" class="audio-wrap hidden">
+                        <audio id="audioPlayer" controls style="width: 100%; outline: none; border-radius: 6px;"></audio>
+                    </div>
                     <div id="transcript" class="transcript">Waiting for audio input…</div>
                     <div class="foot" id="audioMeta">0 timestamped segments</div>
                 </article>

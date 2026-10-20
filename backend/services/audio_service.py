@@ -120,10 +120,13 @@ class AudioService:
                 audio_file.name,
             )
 
+            pipe_kwargs = {"return_timestamps": True}
+            if generate_kwargs:
+                pipe_kwargs["generate_kwargs"] = generate_kwargs
+
             result = self.pipe(
                 str(audio_file),
-                return_timestamps=True,
-                generate_kwargs=generate_kwargs or None,
+                **pipe_kwargs,
             )
 
             transcript = result.get("text", "").strip()

@@ -118,6 +118,34 @@ class SessionStore:
             except OSError:
                 return False
 
+    def list_sessions(self, limit: int = 20) -> list[dict[str, Any]]:
+        """List recently saved sessions."""
+        sessions = []
+        with self._lock:
+            try:
+                paths = sorted(
+                    self.storage_dir.glob("*.json"),
+                    key=lambda p: p.stat().st_mtime,
+                    reverse=True,
+                )
+                for path in paths[:limit]:
+                    try:
+                        with path.open("r", encoding="utf-8") as file:
+                            entry = json.load(file)
+                        data = entry.get("data", {})
+                        sessions.append({
+                            "session_id": entry.get("session_id", path.stem),
+                            "created_at": entry.get("created_at"),
+                            "source": data.get("source", "unknown"),
+                            "filename": data.get("filename", ""),
+                            "summary": data.get("summary", data.get("visual_summary", "")),
+                        })
+                    except Exception:
+                        continue
+            except OSError:
+                pass
+        return sessions
+
     def _session_path(self, session_id: str) -> Path:
         """Build a safe filename for a session ID."""
         safe_id = str(session_id)
@@ -168,6 +196,11 @@ def save_session(session_id: str, data: dict[str, Any]) -> bool:
 def get_session(session_id: str) -> dict[str, Any] | None:
     return session_store.get_session(session_id)
 
+
+
+
+def list_sessions(limit: int = 20) -> list[dict[str, Any]]:
+    return session_store.list_sessions(limit=limit)
 
 def delete_session(session_id: str) -> bool:
     return session_store.delete_session(session_id)

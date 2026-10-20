@@ -47,10 +47,12 @@ def test_frontend_and_health_are_served_by_flask(client):
     assert health.get_json()["success"] is True
     assert script.status_code == 200
     assert stylesheet.status_code == 200
+    assert client.get("/api").status_code == 200
     assert client.get("/api/chat").status_code == 200
     assert client.get("/api/audio").status_code == 200
     assert client.get("/api/video").status_code == 200
     assert client.get("/api/upload").status_code == 200
+    assert client.get("/api/results").status_code == 200
 
 
 def test_image_analysis_upload_returns_evidence_session(client, monkeypatch):
@@ -211,3 +213,73 @@ def test_analysis_endpoint_rejects_wrong_media_type(client):
 
     assert response.status_code == 400
     assert response.get_json()["success"] is False
+
+
+def test_results_endpoint_lifecycle(client):
+    sid = session_store.create_session({
+        "source": "image",
+        "summary": "Laboratory testing scene",
+        "objects": [{"label": "computer", "score": 0.99}],
+        "people_count": 0,
+    })
+
+    # Retrieve all results
+    all_res = client.get("/api/results")
+    assert all_res.status_code == 200
+    data = all_res.get_json()
+    assert data["success"] is True
+    assert any(s["session_id"] == sid for s in data["sessions"])
+
+    # Retrieve single session
+    single = client.get(f"/api/results/{sid}")
+    assert single.status_code == 200
+    single_data = single.get_json()
+    assert single_data["success"] is True
+    assert single_data["result"]["source"] == "image"
+
+    # Delete session
+    del_res = client.delete(f"/api/results/{sid}")
+    assert del_res.status_code == 200
+    assert del_res.get_json()["success"] is True
+
+    # Ensure 404 after deletion
+    after_del = client.get(f"/api/results/{sid}")
+    assert after_del.status_code == 404
+
+
+def test_file_upload_endpoint(client):
+    data = io.BytesIO(b"fake audio data")
+    response = client.post(
+        "/api/upload",
+        data={"file": (data, "recording.mp3")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+    res = response.get_json()
+    assert res["success"] is True
+    assert res["media_type"] == "audio"
+
+
+def test_chat_rule_based_fallback(client):
+    sid = session_store.create_session({
+        "source": "image",
+        "summary": "Suspect seen near the entrance.",
+        "people_count": 2,
+        "objects": [{"label": "person", "score": 0.98}, {"label": "knife", "score": 0.95}],
+    })
+
+    # Ask about people
+    chat_res = client.post(
+        "/api/chat/image",
+        json={"session_id": sid, "question": "How many people were detected?"},
+    )
+    assert chat_res.status_code == 200
+    assert "2 person" in chat_res.get_json()["answer"]
+
+    # Ask about weapons
+    chat_weapon = client.post(
+        "/api/chat/image",
+        json={"session_id": sid, "question": "Are there any weapons?"},
+    )
+    assert chat_weapon.status_code == 200
+    assert "weapon" in chat_weapon.get_json()["answer"].lower()

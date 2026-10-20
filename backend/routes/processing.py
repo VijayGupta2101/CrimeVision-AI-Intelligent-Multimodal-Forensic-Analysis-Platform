@@ -86,18 +86,59 @@ def analyze_image():
 
         # Generate image caption.
         captioner = get_captioner()
-        caption_output = captioner(image)
+        try:
+            caption_output = captioner(image, text="a photo of")
+        except (TypeError, ValueError):
+            caption_output = captioner(image)
 
         summary = (
             caption_output[0].get("generated_text", "")
             if caption_output else ""
         )
 
+        # Extract observed actions and provisional hypotheses
+        actions = []
+        labels_lower = [item["label"].lower() for item in objects]
+        if any(w in labels_lower for w in ["knife", "gun", "weapon", "scissors", "baseball bat"]):
+            actions.append("Potential weapon item detected in frame")
+        if "person" in labels_lower:
+            actions.append("Subject / Person presence observed")
+        if not actions and summary:
+            actions.append(f"Visual scene context: {summary[:55]}")
+
+        hypotheses = []
+        try:
+            from services.scenario_service import generate_scenarios
+            scenario_res = generate_scenarios({
+                "objects": [o["label"] for o in objects],
+                "summary": summary,
+                "people_count": sum(1 for item in objects if item["label"].lower() == "person"),
+            })
+            if scenario_res.get("scenarios"):
+                hypotheses = scenario_res["scenarios"]
+        except Exception:
+            pass
+
+        if not hypotheses:
+            hypotheses = [
+                {
+                    "title": "Primary Scenario",
+                    "description": f"Visual observation confirms {len(objects)} object(s) with scene context '{summary or 'unspecified'}'.",
+                    "status": "provisional"
+                },
+                {
+                    "title": "Alternative Context",
+                    "description": "Evidence requires corroboration from environmental conditions and timeline analysis.",
+                    "status": "provisional"
+                }
+            ]
+
         # Return results to the frontend and persist them for evidence Q&A.
         result = {
             "success": True,
             "message": "Image analysis completed",
             "filename": filename,
+            "file_url": f"/uploads/{image_path.name}",
             "visual_summary": summary,
             "summary": summary,
             "objects": objects,
@@ -108,7 +149,7 @@ def analyze_image():
                 if item["label"].lower() == "person"
             ),
             "location": "Not established from image alone",
-            "actions": [],
+            "actions": actions,
             "evidence_facts": [
                 {
                     "observation": item["label"],
@@ -117,7 +158,7 @@ def analyze_image():
                 }
                 for item in objects
             ],
-            "hypotheses": [],
+            "hypotheses": hypotheses,
         }
         result["session_id"] = session_store.create_session({
             "source": "image",
@@ -185,6 +226,7 @@ def analyze_audio():
                 "error": result.get("error", "Audio analysis failed")
             }), 500
 
+        result["file_url"] = f"/uploads/{audio_path.name}"
         result["session_id"] = session_store.create_session({
             "source": "audio",
             **result,
@@ -247,6 +289,7 @@ def analyze_video():
             original_filename=filename,
         )
 
+        result["file_url"] = f"/uploads/{video_path.name}"
         return jsonify(result)
 
     except Exception as exc:

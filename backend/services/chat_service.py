@@ -153,6 +153,46 @@ def _get_groq_client():
         return None
 
 
+def _extract_evidence_fallback(context: dict[str, Any], question: str) -> str:
+    q_lower = question.lower()
+    if any(k in q_lower for k in ["how many people", "person count", "people", "persons", "who was there", "who is visible"]):
+        people = context.get("people_count")
+        if people is not None:
+            return f"Evidence record shows {people} person(s) identified in the analyzed scene."
+    if any(k in q_lower for k in ["what object", "objects", "what was found", "what is detected", "items"]):
+        objects = context.get("objects", context.get("detected_objects", []))
+        if objects:
+            labels = []
+            for obj in objects:
+                if isinstance(obj, dict):
+                    labels.append(obj.get("label", str(obj)))
+                else:
+                    labels.append(str(obj))
+            return f"Recorded detected objects ({len(labels)} total): {', '.join(labels[:10])}."
+    if any(k in q_lower for k in ["weapon", "knife", "gun", "firearm", "armed"]):
+        objects = context.get("objects", context.get("detected_objects", []))
+        weapons = []
+        for obj in objects:
+            label = obj.get("label", str(obj)) if isinstance(obj, dict) else str(obj)
+            if any(w in label.lower() for w in ["knife", "gun", "weapon", "firearm", "pistol", "rifle"]):
+                weapons.append(label)
+        if weapons:
+            return f"Potential weapon(s) flagged in evidence: {', '.join(weapons)}."
+        return "No weapons were detected in the analyzed evidence."
+    if any(k in q_lower for k in ["transcript", "what did they say", "what was said", "audio", "speech", "words"]):
+        transcript = context.get("transcript")
+        if transcript:
+            return f'Recorded audio transcript: "{transcript}"'
+    if any(k in q_lower for k in ["timeline", "events", "order", "sequence"]):
+        timeline = context.get("timeline", [])
+        if timeline:
+            lines = [f"{e.get('timestamp', e.get('start', '0'))}s: {e.get('description', '')}" for e in timeline[:5]]
+            return "Timeline highlights: " + "; ".join(lines)
+    summary = context.get("summary") or context.get("visual_summary") or "Evidence analysis available."
+    obj_count = context.get("object_count", len(context.get("objects", [])))
+    return f"Evidence findings: {summary} (Objects: {obj_count}, People: {context.get('people_count', '—')})"
+
+
 def query_chat(
     session_id: str,
     question: str,
@@ -219,12 +259,11 @@ def query_chat(
     client = _get_groq_client()
 
     if client is None:
+        answer = _extract_evidence_fallback(context, question)
         return {
-            "success": False,
-            "error": (
-                "Groq is unavailable. Check GROQ_API_KEY and install "
-                "the groq package."
-            ),
+            "success": True,
+            "answer": answer,
+            "source": "evidence_rules",
         }
 
     model = os.getenv(
@@ -288,7 +327,9 @@ Provide a concise, factual answer.
         }
 
     except Exception as exc:
+        fallback_answer = _extract_evidence_fallback(context, question)
         return {
-            "success": False,
-            "error": f"Chat request failed: {exc}",
+            "success": True,
+            "answer": fallback_answer,
+            "source": "evidence_rules_fallback",
         }

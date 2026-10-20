@@ -142,8 +142,12 @@ function displayConnectionStatus(connected) {
 
     if (element) {
         element.textContent = connected
-            ? "Backend connected"
-            : "Backend disconnected";
+            ? "Backend connected (Online)"
+            : "Backend disconnected (Offline)";
+        const dot = element.parentElement ? element.parentElement.querySelector("i") : null;
+        if (dot) {
+            dot.style.background = connected ? "var(--green)" : "#ef4444";
+        }
     }
 }
 
@@ -356,6 +360,16 @@ function clearPreview() {
 
     setText("eventType", "Unclassified");
     setText("audioLocation", "Not established");
+
+    const player = $("audioPlayer");
+    const playerContainer = $("audioPlayerContainer");
+    if (player) {
+        player.pause();
+        player.removeAttribute("src");
+    }
+    if (playerContainer) {
+        playerContainer.classList.add("hidden");
+    }
 }
 
 
@@ -447,13 +461,22 @@ if (fileInput) {
         }
 
         if (currentMode === "audio") {
+            const player = $("audioPlayer");
+            const playerContainer = $("audioPlayerContainer");
+            if (player) {
+                player.src = previewURL;
+            }
+            if (playerContainer) {
+                playerContainer.classList.remove("hidden");
+            }
+
             setText(
                 "transcript",
                 `Selected audio: ${uploadedFile.name}\n` +
                 "Click Start Processing to transcribe this recording."
             );
 
-            setText("audioSummary", "Audio is ready for processing.");
+            setText("audioSummary", "Audio is loaded and ready for AI transcription.");
         }
 
         showNotice(
@@ -609,8 +632,9 @@ function renderTimeline(elementId, events) {
             event.transcript ||
             "Review against the original evidence.";
 
+        const numericTime = Number(rawTime ?? 0);
         return `
-            <div class="event">
+            <div class="event" data-time="${numericTime}" title="Click to seek media to ${escapeHTML(time)}">
                 <div class="time">
                     ${escapeHTML(time)}
                 </div>
@@ -631,12 +655,77 @@ function renderTimeline(elementId, events) {
             </div>
         `;
     }).join("");
+
+    element.querySelectorAll(".event").forEach((eventEl) => {
+        eventEl.addEventListener("click", () => {
+            const time = parseFloat(eventEl.dataset.time);
+            if (!Number.isFinite(time)) return;
+            if (currentMode === "video") {
+                const video = document.querySelector("#videoStage video");
+                if (video) {
+                    video.currentTime = time;
+                    video.play().catch(() => {});
+                    showNotice(`Media offset seeked to ${formatTimestamp(time)}`, "success");
+                }
+            } else if (currentMode === "audio") {
+                const audio = $("audioPlayer");
+                if (audio) {
+                    audio.currentTime = time;
+                    audio.play().catch(() => {});
+                    showNotice(`Audio offset seeked to ${formatTimestamp(time)}`, "success");
+                }
+            }
+        });
+    });
 }
 
 
 /* -------------------- IMAGE ANALYSIS RENDERING -------------------- */
 
 function renderImageResults(data) {
+    const stage = $("imageStage");
+    const rawObjects = getValue(data, ["objects", "detected_objects", "detections"], []);
+    const objectsList = toArray(rawObjects);
+
+    if (stage && previewURL) {
+        const objectsWithBox = objectsList.filter(item => item && item.box && typeof item.box === "object" && item.box.xmin !== undefined);
+        stage.className = "stage";
+        stage.innerHTML = `
+            <div class="bbox-wrapper" id="bboxWrapper">
+                <img id="bboxImg" src="${escapeHTML(previewURL)}" alt="Visual Evidence">
+                <div class="bbox-overlay" id="bboxOverlay"></div>
+            </div>
+        `;
+        const img = $("bboxImg");
+        const overlay = $("bboxOverlay");
+        if (img && overlay && objectsWithBox.length) {
+            const drawBoxes = () => {
+                const nw = img.naturalWidth || img.width;
+                const nh = img.naturalHeight || img.height;
+                if (!nw || !nh) return;
+                overlay.innerHTML = objectsWithBox.map(item => {
+                    const b = item.box;
+                    const left = Math.max(0, (b.xmin / nw) * 100);
+                    const top = Math.max(0, (b.ymin / nh) * 100);
+                    const width = Math.min(100 - left, ((b.xmax - b.xmin) / nw) * 100);
+                    const height = Math.min(100 - top, ((b.ymax - b.ymin) / nh) * 100);
+                    const label = item.label || "object";
+                    const isWeapon = /knife|gun|weapon|firearm|pistol/i.test(label);
+                    const conf = item.score ? ` ${(item.score * 100).toFixed(0)}%` : "";
+                    return `
+                        <div class="bbox-box ${isWeapon ? 'weapon' : ''}" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%;width:${width.toFixed(2)}%;height:${height.toFixed(2)}%;">
+                            <span class="bbox-label">${escapeHTML(label)}${conf}</span>
+                        </div>
+                    `;
+                }).join("");
+            };
+            if (img.complete) {
+                drawBoxes();
+            } else {
+                img.onload = drawBoxes;
+            }
+        }
+    }
     const summary = getValue(data, [
         "visual_summary",
         "summary",
